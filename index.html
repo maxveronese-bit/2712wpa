@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Personal OS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root { --primary: #4A90D9; --danger: #E74C3C; --success: #27AE60; --warning: #F39C12; --bg: #F5F7FA; --card: #FFFFFF; --text: #2C3E50; --text-light: #7F8C8D; --border: #E0E0E0; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 70px; }
+.header { background: var(--primary); color: white; padding: 16px; display: flex; align-items: center; position: sticky; top: 0; z-index: 100; }
+.header-title { flex: 1; font-size: 18px; font-weight: 600; text-align: center; }
+.header-btn { background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 8px; }
+.nav { position: fixed; bottom: 0; left: 0; right: 0; background: white; display: flex; border-top: 1px solid var(--border); z-index: 100; }
+.nav-btn { flex: 1; padding: 12px 8px; text-align: center; background: none; border: none; font-size: 12px; color: var(--text-light); cursor: pointer; }
+.nav-btn.active { color: var(--primary); }
+.nav-btn span { display: block; font-size: 20px; }
+.section { display: none; padding: 16px; }
+.section.active { display: block; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px; }
+.stat-card { background: var(--card); padding: 12px 8px; border-radius: 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.stat-value { font-size: 24px; font-weight: 700; color: var(--primary); }
+.stat-label { font-size: 11px; color: var(--text-light); margin-top: 4px; }
+.list-item { background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.04); }
+.list-item.completed { opacity: 0.6; }
+.list-item-icon { font-size: 24px; }
+.list-item-content { flex: 1; min-width: 0; }
+.list-item-title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list-item-meta { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+.list-item-value { font-weight: 600; }
+.text-danger { color: var(--danger); }
+.text-success { color: var(--success); }
+.priority-urgente { background: var(--danger); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.priority-alta { background: var(--warning); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.priority-media { background: var(--primary); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.priority-bassa { background: var(--text-light); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+.empty { text-align: center; padding: 24px; color: var(--text-light); }
+.dash-section { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+.dash-section h3 { margin-bottom: 12px; font-size: 16px; }
+.btn { padding: 10px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-success { background: var(--success); color: white; }
+.btn-fab { position: fixed; bottom: 80px; right: 16px; width: 56px; height: 56px; border-radius: 50%; font-size: 24px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+.drawer { position: fixed; top: 0; left: -280px; width: 280px; height: 100%; background: white; z-index: 200; transition: left 0.3s; box-shadow: 2px 0 12px rgba(0,0,0,0.1); overflow-y: auto; }
+.drawer.open { left: 0; }
+.drawer-header { background: var(--primary); color: white; padding: 24px 16px; }
+.drawer-header h2 { font-size: 20px; }
+.drawer-menu { padding: 8px 0; }
+.drawer-item { padding: 14px 20px; cursor: pointer; display: flex; align-items: center; gap: 12px; }
+.drawer-item:hover { background: var(--bg); }
+.drawer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 199; display: none; }
+.drawer.open + .drawer-overlay { display: block; }
+.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 300; align-items: flex-end; }
+.modal.open { display: flex; }
+.modal-content { background: white; width: 100%; max-height: 90vh; border-radius: 20px 20px 0 0; padding: 20px; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.modal-header h3 { font-size: 18px; }
+.modal-close { background: none; border: none; font-size: 28px; color: var(--text-light); cursor: pointer; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-weight: 500; margin-bottom: 6px; font-size: 14px; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
+.form-group textarea { resize: vertical; }
+.form-row { display: flex; gap: 12px; }
+.form-row .form-group { flex: 1; }
+.form-actions { display: flex; gap: 12px; margin-top: 20px; }
+.form-actions .btn { flex: 1; }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+.filter-btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: 20px; background: white; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+.timer-display { text-align: center; padding: 32px; }
+.timer-time { font-size: 48px; font-weight: 300; font-family: 'SF Mono', monospace; }
+.timer-desc { color: var(--text-light); margin-top: 8px; }
+.timer-controls { display: flex; gap: 12px; justify-content: center; margin-top: 24px; }
+.finanze-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px; }
+.fin-card { background: var(--card); padding: 12px; border-radius: 10px; text-align: center; }
+.fin-label { font-size: 11px; color: var(--text-light); display: block; }
+.fin-value { font-size: 18px; font-weight: 600; }
+.fin-spese .fin-value { color: var(--danger); }
+.fin-incassi .fin-value { color: var(--success); }
+.fin-saldo .fin-value { color: var(--primary); }
+.toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: var(--text); color: white; padding: 12px 24px; border-radius: 8px; z-index: 400; opacity: 0; transition: opacity 0.3s; }
+.toast.show { opacity: 1; }
+.sync-popup { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 24px; border-radius: 12px; z-index: 400; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: none; text-align: center; }
+.sync-popup.show { display: block; }
+.checkbox-group { display: flex; align-items: center; gap: 8px; }
+.checkbox-group input { width: 20px; height: 20px; }
+.agenda-controls { background: var(--card); padding: 12px; border-radius: 10px; margin-bottom: 16px; }
+.agenda-nav { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; }
+.agenda-nav button { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; }
+.agenda-nav input { padding: 8px; border: 1px solid var(--border); border-radius: 6px; }
+.agenda-views { display: flex; gap: 8px; justify-content: center; }
+.agenda-views button { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; font-size: 13px; }
+.agenda-views button.active { background: var(--primary); color: white; border-color: var(--primary); }
+.agenda-content { background: var(--card); border-radius: 10px; padding: 16px; }
+.agenda-content h3 { margin-bottom: 12px; text-transform: capitalize; }
+.day-view { border: 1px solid var(--border); border-radius: 8px; }
+.hour-row { display: flex; border-bottom: 1px solid var(--border); min-height: 48px; }
+.hour-row:last-child { border-bottom: none; }
+.hour-label { width: 60px; padding: 8px; font-size: 12px; color: var(--text-light); border-right: 1px solid var(--border); flex-shrink: 0; }
+.hour-content { flex: 1; padding: 4px; display: flex; flex-wrap: wrap; gap: 4px; }
+.agenda-item { background: var(--primary); color: white; padding: 4px 8px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+.agenda-item.evento { background: #9B59B6; }
+.agenda-item.task { background: var(--primary); }
+.agenda-item.memo { background: var(--warning); }
+.item-title { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; }
+.item-meta { font-size: 10px; opacity: 0.8; }
+.day-summary { background: var(--bg); padding: 12px; border-radius: 8px; margin: 12px 0; text-align: center; }
+.stacked-items { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.stacked-items .agenda-item { display: flex; align-items: center; gap: 8px; padding: 10px; }
+.item-icon { font-size: 18px; }
+.week-view { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.week-header { display: grid; grid-template-columns: repeat(7, 1fr); background: var(--bg); }
+.week-day-header { padding: 8px; text-align: center; font-size: 12px; font-weight: 500; border-right: 1px solid var(--border); }
+.week-day-header:last-child { border-right: none; }
+.week-day-header.today { background: var(--primary); color: white; }
+.week-body { display: grid; grid-template-columns: repeat(7, 1fr); min-height: 200px; }
+.week-day-col { border-right: 1px solid var(--border); padding: 4px; }
+.week-day-col:last-child { border-right: none; }
+.week-item { background: var(--primary); color: white; padding: 4px 6px; border-radius: 4px; font-size: 10px; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.week-item.more { background: var(--text-light); }
+.week-total { font-size: 10px; color: var(--text-light); text-align: center; margin-top: 4px; }
+.month-view { }
+.month-header { display: grid; grid-template-columns: repeat(7, 1fr); margin-bottom: 8px; }
+.month-day-header { text-align: center; font-size: 12px; font-weight: 500; color: var(--text-light); }
+.month-body { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.month-day { aspect-ratio: 1; background: var(--bg); border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; }
+.month-day.empty { background: transparent; }
+.month-day.today { background: var(--primary); color: white; }
+.day-num { font-weight: 500; }
+.day-count { font-size: 10px; background: var(--danger); color: white; padding: 1px 5px; border-radius: 10px; margin-top: 2px; }
+.quarter-view { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.quarter-month h4 { margin-bottom: 8px; font-size: 14px; }
+.quarter-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.quarter-day { aspect-ratio: 1; font-size: 9px; text-align: center; background: var(--bg); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+.quarter-day.has-items { background: var(--primary); color: white; }
+</style>
+</head>
+<body>
+<header class="header">
+  <button class="header-btn" onclick="toggleDrawer()">☰</button>
+  <h1 class="header-title" id="header-title">📊 Dashboard</h1>
+  <button class="header-btn" onclick="openSettings()">⚙️</button>
+</header>
+<nav class="drawer" id="drawer">
+  <div class="drawer-header"><h2>📱 Personal OS</h2></div>
+  <div class="drawer-menu">
+    <div class="drawer-item" onclick="showSection('dashboard');toggleDrawer()">📊 Dashboard</div>
+    <div class="drawer-item" onclick="showSection('inbox');toggleDrawer()">📥 Inbox</div>
+    <div class="drawer-item" onclick="showSection('tasks');toggleDrawer()">✅ Tasks</div>
+    <div class="drawer-item" onclick="showSection('eventi');toggleDrawer()">📅 Eventi</div>
+    <div class="drawer-item" onclick="showSection('pratiche');toggleDrawer()">📁 Pratiche</div>
+    <div class="drawer-item" onclick="showSection('progetti');toggleDrawer()">📂 Progetti</div>
+    <div class="drawer-item" onclick="showSection('routine');toggleDrawer()">🔄 Routine</div>
+    <div class="drawer-item" onclick="showSection('obiettivi');toggleDrawer()">🎯 Obiettivi</div>
+    <div class="drawer-item" onclick="showSection('timer');toggleDrawer()">⏱️ Timer</div>
+    <div class="drawer-item" onclick="showSection('finanze');toggleDrawer()">💰 Finanze</div>
+    <hr style="margin:12px 0">
+    <div class="drawer-item" onclick="showSection('agendaImpegni');toggleDrawer()">📋 Agenda Impegni</div>
+    <div class="drawer-item" onclick="showSection('agendaEventi');toggleDrawer()">🗓️ Agenda Eventi</div>
+  </div>
+</nav>
+<div class="drawer-overlay" onclick="toggleDrawer()"></div>
+<section class="section active" id="section-dashboard">
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-value" id="stat-tasks">0</div><div class="stat-label">Task</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-inbox">0</div><div class="stat-label">Inbox</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-eventi">0</div><div class="stat-label">Eventi</div></div>
+    <div class="stat-card"><div class="stat-value" id="stat-tempo">0h</div><div class="stat-label">Tempo</div></div>
+  </div>
+  <div id="dashboard-content"></div>
+</section>
+<section class="section" id="section-inbox"><div id="inbox-list"></div><button class="btn btn-primary btn-fab" onclick="openNewMemo()">+</button></section>
+<section class="section" id="section-tasks">
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="filterTasks('aperti')">Aperti</button>
+    <button class="filter-btn" onclick="filterTasks('oggi')">Oggi</button>
+    <button class="filter-btn" onclick="filterTasks('completati')">Completati</button>
+    <button class="filter-btn" onclick="filterTasks('tutti')">Tutti</button>
+  </div>
+  <div id="tasks-list"></div><button class="btn btn-primary btn-fab" onclick="openNewTask()">+</button>
+</section>
+<section class="section" id="section-eventi"><div id="eventi-list"></div><button class="btn btn-primary btn-fab" onclick="openNewEvento()">+</button></section>
+<section class="section" id="section-pratiche"><div id="pratiche-list"></div><button class="btn btn-primary btn-fab" onclick="openNewPratica()">+</button></section>
+<section class="section" id="section-progetti"><div id="progetti-list"></div><button class="btn btn-primary btn-fab" onclick="openNewProgetto()">+</button></section>
+<section class="section" id="section-routine"><div id="routine-list"></div><button class="btn btn-primary btn-fab" onclick="openNewRoutine()">+</button></section>
+<section class="section" id="section-obiettivi"><div id="obiettivi-list"></div><button class="btn btn-primary btn-fab" onclick="openNewObiettivo()">+</button></section>
+<section class="section" id="section-timer">
+  <div class="timer-display"><div class="timer-time" id="timer-time">00:00:00</div><div class="timer-desc" id="timer-desc"></div></div>
+  <div class="timer-controls"><button class="btn btn-success" id="btn-start" onclick="openStartTimer()">▶ Avvia</button><button class="btn btn-danger" id="btn-stop" style="display:none" onclick="stopTimer()">⏹ Stop</button></div>
+  <div id="timer-logs" style="margin-top:24px"></div>
+</section>
+<section class="section" id="section-finanze"><div id="finanze-content"></div><div style="position:fixed;bottom:80px;right:16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-danger" onclick="openNewSpesa()" style="border-radius:50%;width:48px;height:48px">💸</button><button class="btn btn-success" onclick="openNewIncasso()" style="border-radius:50%;width:48px;height:48px">💰</button></div></section>
+<section class="section" id="section-agendaImpegni"><div id="agenda-impegni-content"></div></section>
+<section class="section" id="section-agendaEventi"><div id="agenda-eventi-content"></div></section>
+<nav class="nav">
+  <button class="nav-btn active" onclick="showSection('dashboard')"><span>📊</span>Home</button>
+  <button class="nav-btn" onclick="showSection('tasks')"><span>✅</span>Tasks</button>
+  <button class="nav-btn" onclick="showSection('timer')"><span>⏱️</span>Timer</button>
+  <button class="nav-btn" onclick="showSection('finanze')"><span>💰</span>Finanze</button>
+</nav>
+<div class="modal" id="modal-memo"><div class="modal-content"><div class="modal-header"><h3>📝 Memo</h3><button class="modal-close" onclick="closeModal('modal-memo')">×</button></div><div class="form-group"><label>Titolo</label><input type="text" id="memo-titolo"></div><div class="form-group"><label>Testo</label><textarea id="memo-testo" rows="3"></textarea></div><div class="form-row"><div class="form-group"><label>Scadenza</label><input type="date" id="memo-scadenza"></div><div class="form-group"><label>Durata (min)</label><input type="number" id="memo-durata" min="0"></div></div><div class="form-group"><div class="checkbox-group"><input type="checkbox" id="memo-urgente"><label>Urgente</label></div></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-memo" onclick="deleteMemo()">Elimina</button><button class="btn btn-primary" onclick="saveMemo()">Salva</button></div></div></div>
+<div class="modal" id="modal-task"><div class="modal-content"><div class="modal-header"><h3>✅ Task</h3><button class="modal-close" onclick="closeModal('modal-task')">×</button></div><div class="form-group"><label>Titolo</label><input type="text" id="task-titolo"></div><div class="form-group"><label>Descrizione</label><textarea id="task-descrizione" rows="2"></textarea></div><div class="form-row"><div class="form-group"><label>Scadenza</label><input type="date" id="task-scadenza"></div><div class="form-group"><label>Durata (min)</label><input type="number" id="task-durata" min="0"></div></div><div class="form-row"><div class="form-group"><label>Priorità</label><select id="task-priorita"><option value="bassa">Bassa</option><option value="media" selected>Media</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></div><div class="form-group"><label>Stato</label><select id="task-stato"><option value="da_fare">Da fare</option><option value="in_corso">In corso</option><option value="in_attesa">In attesa</option><option value="completato">Completato</option></select></div></div><div class="form-group"><label>Codice</label><input type="text" id="task-codice"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-task" onclick="deleteTask()">Elimina</button><button class="btn btn-primary" onclick="saveTask()">Salva</button></div></div></div>
+<div class="modal" id="modal-evento"><div class="modal-content"><div class="modal-header"><h3>📅 Evento</h3><button class="modal-close" onclick="closeModal('modal-evento')">×</button></div><div class="form-group"><label>Titolo</label><input type="text" id="evento-titolo"></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="evento-data"></div><div class="form-group"><label>Ora</label><input type="time" id="evento-ora"></div></div><div class="form-row"><div class="form-group"><label>Durata (min)</label><input type="number" id="evento-durata" min="0"></div><div class="form-group"><label>Luogo</label><input type="text" id="evento-luogo"></div></div><div class="form-group"><label>Note</label><textarea id="evento-note" rows="2"></textarea></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-evento" onclick="deleteEvento()">Elimina</button><button class="btn btn-primary" onclick="saveEvento()">Salva</button></div></div></div>
+<div class="modal" id="modal-pratica"><div class="modal-content"><div class="modal-header"><h3>📁 Pratica</h3><button class="modal-close" onclick="closeModal('modal-pratica')">×</button></div><div class="form-row"><div class="form-group"><label>Codice</label><input type="text" id="pratica-codice"></div><div class="form-group"><label>Cliente</label><input type="text" id="pratica-cliente"></div></div><div class="form-row"><div class="form-group"><label>Tipo</label><input type="text" id="pratica-tipo"></div><div class="form-group"><label>Stato</label><select id="pratica-stato"><option value="aperta">Aperta</option><option value="in_corso">In corso</option><option value="sospesa">Sospesa</option><option value="chiusa">Chiusa</option></select></div></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-pratica" onclick="deletePratica()">Elimina</button><button class="btn btn-primary" onclick="savePratica()">Salva</button></div></div></div>
+<div class="modal" id="modal-progetto"><div class="modal-content"><div class="modal-header"><h3>📂 Progetto</h3><button class="modal-close" onclick="closeModal('modal-progetto')">×</button></div><div class="form-row"><div class="form-group"><label>Codice</label><input type="text" id="progetto-codice"></div><div class="form-group"><label>Nome</label><input type="text" id="progetto-nome"></div></div><div class="form-group"><label>Stato</label><select id="progetto-stato"><option value="pianificato">Pianificato</option><option value="in_corso">In corso</option><option value="in_pausa">In pausa</option><option value="completato">Completato</option><option value="annullato">Annullato</option></select></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-progetto" onclick="deleteProgetto()">Elimina</button><button class="btn btn-primary" onclick="saveProgetto()">Salva</button></div></div></div>
+<div class="modal" id="modal-routine"><div class="modal-content"><div class="modal-header"><h3>🔄 Routine</h3><button class="modal-close" onclick="closeModal('modal-routine')">×</button></div><div class="form-row"><div class="form-group"><label>Nome</label><input type="text" id="routine-nome"></div><div class="form-group"><label>Icona</label><input type="text" id="routine-icona"></div></div><div class="form-group"><label>Frequenza</label><select id="routine-frequenza"><option value="giornaliera">Giornaliera</option><option value="settimanale">Settimanale</option><option value="mensile">Mensile</option></select></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-routine" onclick="deleteRoutine()">Elimina</button><button class="btn btn-primary" onclick="saveRoutine()">Salva</button></div></div></div>
+<div class="modal" id="modal-obiettivo"><div class="modal-content"><div class="modal-header"><h3>🎯 Obiettivo</h3><button class="modal-close" onclick="closeModal('modal-obiettivo')">×</button></div><div class="form-group"><label>Descrizione</label><textarea id="obiettivo-descrizione" rows="2"></textarea></div><div class="form-row"><div class="form-group"><label>Periodo</label><select id="obiettivo-periodo"><option value="settimanale">Settimanale</option><option value="mensile">Mensile</option><option value="trimestrale">Trimestrale</option><option value="annuale">Annuale</option></select></div><div class="form-group"><label>Target</label><input type="number" id="obiettivo-target"></div></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-obiettivo" onclick="deleteObiettivo()">Elimina</button><button class="btn btn-primary" onclick="saveObiettivo()">Salva</button></div></div></div>
+<div class="modal" id="modal-start-timer"><div class="modal-content"><div class="modal-header"><h3>⏱️ Avvia Timer</h3><button class="modal-close" onclick="closeModal('modal-start-timer')">×</button></div><div class="form-group"><label>Descrizione</label><input type="text" id="timer-descrizione"></div><div class="form-row"><div class="form-group"><label>Codice</label><input type="text" id="timer-codice"></div><div class="form-group"><label>Tipo</label><select id="timer-tipo"><option value="task">Task</option><option value="telefonata">Telefonata</option><option value="riunione">Riunione</option><option value="altro">Altro</option></select></div></div><div class="form-group"><div class="checkbox-group"><input type="checkbox" id="timer-fatturabile" checked><label>Fatturabile</label></div></div><div class="form-actions"><button class="btn btn-success" onclick="startTimer()">▶ Avvia</button></div></div></div>
+<div class="modal" id="modal-stop-timer"><div class="modal-content"><div class="modal-header"><h3>⏱️ Salva Tempo</h3><button class="modal-close" onclick="closeModal('modal-stop-timer')">×</button></div><p style="margin-bottom:12px"><strong id="stop-timer-desc"></strong></p><p style="margin-bottom:16px;font-size:24px" id="stop-timer-time"></p><div class="form-group"><label>Note</label><textarea id="stop-timer-note" rows="2"></textarea></div><div class="form-actions"><button class="btn btn-danger" onclick="discardTimer()">Scarta</button><button class="btn btn-success" onclick="saveTimerLog()">Salva</button></div></div></div>
+<div class="modal" id="modal-spesa"><div class="modal-content"><div class="modal-header"><h3>💸 Spesa</h3><button class="modal-close" onclick="closeModal('modal-spesa')">×</button></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="spesa-data"></div><div class="form-group"><label>Importo €</label><input type="number" id="spesa-importo" step="0.01"></div></div><div class="form-group"><label>Categoria</label><input type="text" id="spesa-categoria"></div><div class="form-group"><label>Descrizione</label><input type="text" id="spesa-descrizione"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-spesa" onclick="deleteSpesa()">Elimina</button><button class="btn btn-primary" onclick="saveSpesa()">Salva</button></div></div></div>
+<div class="modal" id="modal-incasso"><div class="modal-content"><div class="modal-header"><h3>💰 Incasso</h3><button class="modal-close" onclick="closeModal('modal-incasso')">×</button></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="incasso-data"></div><div class="form-group"><label>Importo €</label><input type="number" id="incasso-importo" step="0.01"></div></div><div class="form-group"><label>Tipo</label><select id="incasso-tipo"><option value="fattura">Fattura</option><option value="acconto">Acconto</option><option value="altro">Altro</option></select></div><div class="form-group"><label>Descrizione</label><input type="text" id="incasso-descrizione"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-incasso" onclick="deleteIncasso()">Elimina</button><button class="btn btn-primary" onclick="saveIncasso()">Salva</button></div></div></div>
+<div class="modal" id="modal-settings"><div class="modal-content"><div class="modal-header"><h3>⚙️ Impostazioni</h3><button class="modal-close" onclick="closeModal('modal-settings')">×</button></div><div class="form-group"><label>URL API (Google Script)</label><input type="url" id="input-api-url" placeholder="https://script.google.com/..."></div><div class="form-group"><button class="btn btn-primary" onclick="testConnection()">Test Connessione</button><span id="connection-result" style="margin-left:12px"></span></div><hr style="margin:16px 0"><div class="form-group"><button class="btn btn-success" style="width:100%" onclick="manualSync()">🔄 Sincronizza Ora</button></div></div></div>
+<div class="toast" id="toast"></div>
+<div class="sync-popup" id="sync-popup">🔄 Sincronizzazione...</div>
+<script src="app.js"></script>
+</body>
+</html>

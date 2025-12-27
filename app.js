@@ -1,0 +1,1108 @@
+// PERSONAL OS v5.1
+const state = {
+  inbox: [], tasks: [], eventi: [], pratiche: [], progetti: [],
+  routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [],
+  currentSection: 'dashboard', taskFilter: 'aperti', editingId: null,
+  timer: { active: false, startTime: null, desc: '', codice: '', tipo: 'task', fatturabile: true },
+  agendaView: 'day', agendaDate: new Date().toISOString().split('T')[0],
+  eventiView: 'day', eventiDate: new Date().toISOString().split('T')[0]
+};
+
+const STORAGE_KEY = 'personalOS_v5_data';
+const API_KEY = 'personalOS_v5_api';
+const TIMER_KEY = 'personalOS_v5_timer';
+
+document.addEventListener('DOMContentLoaded', function() {
+  loadData(); loadTimer(); render(); updateStats();
+  setInterval(updateTimerDisplay, 1000);
+  autoSync();
+});
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const data = JSON.parse(saved);
+      ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'].forEach(k => {
+        if (data[k]) state[k] = data[k];
+      });
+    }
+  } catch(e) {}
+}
+
+function saveData() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({
+    inbox: state.inbox, tasks: state.tasks, eventi: state.eventi, pratiche: state.pratiche,
+    progetti: state.progetti, routine: state.routine, routine_log: state.routine_log,
+    obiettivi: state.obiettivi, spese: state.spese, incassi: state.incassi, time_log: state.time_log
+  }));
+}
+
+function loadTimer() {
+  try {
+    const saved = localStorage.getItem(TIMER_KEY);
+    if (saved) {
+      const t = JSON.parse(saved);
+      if (t.active) {
+        state.timer = t;
+        state.timer.startTime = new Date(t.startTime);
+      }
+    }
+  } catch(e) {}
+}
+
+function saveTimer() { localStorage.setItem(TIMER_KEY, JSON.stringify(state.timer)); }
+
+function getApiUrl() { return localStorage.getItem(API_KEY) || ''; }
+function setApiUrl(url) { localStorage.setItem(API_KEY, url); }
+
+async function autoSync() {
+  const url = getApiUrl();
+  if (!url) return;
+  showSyncPopup();
+  try {
+    const resp = await fetch(url + '?action=read');
+    const result = await resp.json();
+    const data = result.data || result;
+    if (data && (data.inbox || data.tasks || data.eventi)) {
+      mergeServerData(data);
+      saveData(); render(); updateStats();
+      toast('✅ Sincronizzato!');
+    }
+  } catch(e) { console.error('autoSync error:', e); }
+  hideSyncPopup();
+}
+
+async function manualSync() {
+  const url = getApiUrl();
+  if (!url) { toast('Configura URL API'); openSettings(); return; }
+  showSyncPopup();
+  try {
+    const resp = await fetch(url + '?action=read');
+    const result = await resp.json();
+    const data = result.data || result;
+    if (data && (data.inbox || data.tasks || data.eventi)) {
+      mergeServerData(data);
+      saveData(); render(); updateStats();
+      toast('✅ Sincronizzato!');
+    } else { toast('Nessun dato trovato'); }
+  } catch(e) { toast('Errore connessione'); console.error(e); }
+  hideSyncPopup();
+}
+
+function mergeServerData(data) {
+  const keyMap = { 'routineLog': 'routine_log', 'timeLog': 'time_log' };
+  Object.keys(keyMap).forEach(k => {
+    if (data[k] && !data[keyMap[k]]) data[keyMap[k]] = data[k];
+  });
+  ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'].forEach(k => {
+    const serverItems = data[k] || [];
+    const localMap = new Map(state[k].map(i => [i.id, i]));
+    serverItems.forEach(item => { if (item.id) localMap.set(item.id, item); });
+    state[k] = Array.from(localMap.values());
+  });
+}
+
+async function syncItem(collection, item) {
+  const url = getApiUrl();
+  if (!url) return;
+  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG' };
+  try { await fetch(`${url}?action=save&sheet=${sheetMap[collection]}&data=${encodeURIComponent(JSON.stringify(item))}`); } catch(e) {}
+}
+
+async function syncDelete(collection, id) {
+  const url = getApiUrl();
+  if (!url) return;
+  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG' };
+  try { await fetch(`${url}?action=delete&sheet=${sheetMap[collection]}&id=${id}`); } catch(e) {}
+}
+
+async function testConnection() {
+  const url = document.getElementById('input-api-url').value.trim();
+  const result = document.getElementById('connection-result');
+  if (!url) { result.innerHTML = '<span style="color:#E74C3C">❌ Inserisci URL</span>'; return; }
+  result.innerHTML = 'Testing...';
+  try {
+    const resp = await fetch(url + '?action=ping');
+    const data = await resp.json();
+    if (data.success || data.status === 'ok') {
+      setApiUrl(url);
+      result.innerHTML = '<span style="color:#27AE60">✅ Connesso!</span>';
+    } else { result.innerHTML = '<span style="color:#E74C3C">❌ Risposta non valida</span>'; }
+  } catch(e) { result.innerHTML = '<span style="color:#E74C3C">❌ Errore</span>'; }
+}
+
+function showSection(name) {
+  state.currentSection = name;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('section-' + name).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  const navMap = { dashboard: 0, tasks: 1, timer: 2, finanze: 3 };
+  if (navMap[name] !== undefined) document.querySelectorAll('.nav-btn')[navMap[name]].classList.add('active');
+  const titles = { dashboard: '📊 Dashboard', inbox: '📥 Inbox', tasks: '✅ Tasks', eventi: '📅 Eventi', pratiche: '📁 Pratiche', progetti: '📂 Progetti', routine: '🔄 Routine', obiettivi: '🎯 Obiettivi', timer: '⏱️ Timer', finanze: '💰 Finanze', agendaImpegni: '📋 Agenda Impegni', agendaEventi: '🗓️ Agenda Eventi' };
+  document.getElementById('header-title').textContent = titles[name] || name;
+  render();
+}
+
+function toggleDrawer() { document.getElementById('drawer').classList.toggle('open'); }
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); state.editingId = null; }
+
+function openSettings() {
+  document.getElementById('input-api-url').value = getApiUrl();
+  document.getElementById('connection-result').innerHTML = '';
+  openModal('modal-settings');
+}
+
+function render() {
+  switch(state.currentSection) {
+    case 'dashboard': renderDashboard(); break;
+    case 'inbox': renderInbox(); break;
+    case 'tasks': renderTasks(); break;
+    case 'eventi': renderEventi(); break;
+    case 'pratiche': renderPratiche(); break;
+    case 'progetti': renderProgetti(); break;
+    case 'routine': renderRoutine(); break;
+    case 'obiettivi': renderObiettivi(); break;
+    case 'timer': renderTimer(); break;
+    case 'finanze': renderFinanze(); break;
+    case 'agendaImpegni': renderAgendaImpegni(); break;
+    case 'agendaEventi': renderAgendaEventi(); break;
+  }
+}
+
+function updateStats() {
+  const today = getToday();
+  const openTasks = state.tasks.filter(t => t.stato !== 'completato').length;
+  const inboxCount = state.inbox.filter(m => !m.processato).length;
+  const todayEvents = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === today).length;
+  const mins = state.time_log.filter(t => formatDateISO(parseDate(t.data)) === today).reduce((s,t) => s + (parseInt(t.minuti)||0), 0);
+  document.getElementById('stat-tasks').textContent = openTasks;
+  document.getElementById('stat-inbox').textContent = inboxCount;
+  document.getElementById('stat-eventi').textContent = todayEvents;
+  document.getElementById('stat-tempo').textContent = Math.floor(mins/60) + 'h ' + (mins%60) + 'm';
+}
+
+// DASHBOARD
+function renderDashboard() {
+  const today = getToday();
+  const todayTasks = state.tasks.filter(t => formatDateISO(parseDate(t.scadenza)) === today && t.stato !== 'completato');
+  const todayEvents = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === today);
+  
+  let html = '<div class="dash-section"><h3>📋 Task di oggi</h3>';
+  if (todayTasks.length === 0) html += '<p class="empty">Nessun task per oggi</p>';
+  else todayTasks.forEach(t => { html += `<div class="list-item" onclick="openTask('${t.id}')"><span class="list-item-icon">✅</span><div class="list-item-content"><div class="list-item-title">${esc(t.titolo)}</div>${t.durata ? '<div class="list-item-meta">⏱️ '+t.durata+' min</div>' : ''}</div></div>`; });
+  html += '</div>';
+  
+  html += '<div class="dash-section"><h3>📅 Eventi di oggi</h3>';
+  if (todayEvents.length === 0) html += '<p class="empty">Nessun evento per oggi</p>';
+  else todayEvents.forEach(e => { html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${e.ora || ''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`; });
+  html += '</div>';
+  
+  document.getElementById('dashboard-content').innerHTML = html;
+}
+
+// INBOX
+function renderInbox() {
+  const items = state.inbox.filter(m => !m.processato);
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Inbox vuoto</p>';
+  else items.forEach(m => {
+    html += `<div class="list-item" onclick="openMemo('${m.id}')"><span class="list-item-icon">${m.urgente ? '🔴' : '📝'}</span><div class="list-item-content"><div class="list-item-title">${esc(m.titolo || m.testo)}</div><div class="list-item-meta">${formatDate(m.timestamp)} ${m.durata ? '⏱️'+m.durata+'min' : ''} ${m.scadenza ? '📅'+formatDate(m.scadenza) : ''}</div></div></div>`;
+  });
+  document.getElementById('inbox-list').innerHTML = html;
+}
+
+// TASKS
+function renderTasks() {
+  let items = [...state.tasks];
+  const filter = state.taskFilter;
+  if (filter === 'aperti') items = items.filter(t => t.stato !== 'completato');
+  else if (filter === 'oggi') items = items.filter(t => formatDateISO(parseDate(t.scadenza)) === getToday() && t.stato !== 'completato');
+  else if (filter === 'completati') items = items.filter(t => t.stato === 'completato');
+  
+  items.sort((a,b) => {
+    const prio = {urgente:0, alta:1, media:2, bassa:3};
+    return (prio[a.priorita]||2) - (prio[b.priorita]||2);
+  });
+  
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessun task</p>';
+  else items.forEach(t => {
+    const done = t.stato === 'completato';
+    html += `<div class="list-item ${done?'completed':''}" onclick="openTask('${t.id}')"><span class="list-item-icon">${done ? '✅' : '⬜'}</span><div class="list-item-content"><div class="list-item-title">${esc(t.titolo)}</div><div class="list-item-meta">${t.scadenza ? '📅'+formatDate(t.scadenza) : ''} ${t.durata ? '⏱️'+t.durata+'min' : ''} <span class="priority-${t.priorita||'media'}">${t.priorita||'media'}</span></div></div></div>`;
+  });
+  document.getElementById('tasks-list').innerHTML = html;
+}
+
+function filterTasks(filter) {
+  state.taskFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  renderTasks();
+}
+
+// EVENTI
+function renderEventi() {
+  const items = [...state.eventi].sort((a,b) => new Date(a.data) - new Date(b.data));
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessun evento</p>';
+  else items.forEach(e => {
+    html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${formatDate(e.data)} ${e.ora||''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`;
+  });
+  document.getElementById('eventi-list').innerHTML = html;
+}
+
+// TIMER
+function renderTimer() {
+  const el = document.getElementById('btn-start');
+  const el2 = document.getElementById('btn-stop');
+  if (state.timer.active) {
+    el.style.display = 'none';
+    el2.style.display = 'inline-block';
+  } else {
+    el.style.display = 'inline-block';
+    el2.style.display = 'none';
+  }
+  renderTimerLogs();
+}
+
+function renderTimerLogs() {
+  const today = getToday();
+  const logs = state.time_log.filter(l => formatDateISO(parseDate(l.data)) === today);
+  let html = '<h3>⏱️ Tempo registrato oggi</h3>';
+  if (logs.length === 0) html += '<p class="empty">Nessuna registrazione</p>';
+  else {
+    const total = logs.reduce((s,l) => s + (parseInt(l.minuti)||0), 0);
+    html += `<p><strong>Totale: ${Math.floor(total/60)}h ${total%60}m</strong></p>`;
+    logs.forEach(l => {
+      html += `<div class="list-item"><span class="list-item-icon">⏱️</span><div class="list-item-content"><div class="list-item-title">${esc(l.descrizione)}</div><div class="list-item-meta">${l.minuti} min - ${l.tipo}</div></div></div>`;
+    });
+  }
+  document.getElementById('timer-logs').innerHTML = html;
+}
+
+// FINANZE
+function renderFinanze() {
+  const thisMonth = getToday().substring(0, 7);
+  const spese = state.spese.filter(s => s.data && s.data.startsWith(thisMonth));
+  const incassi = state.incassi.filter(i => i.data && i.data.startsWith(thisMonth));
+  const totSpese = spese.reduce((s,x) => s + (parseFloat(x.importo)||0), 0);
+  const totIncassi = incassi.reduce((s,x) => s + (parseFloat(x.importo)||0), 0);
+  
+  let html = `<div class="finanze-summary"><div class="fin-card fin-spese"><span class="fin-label">Spese</span><span class="fin-value">€${totSpese.toFixed(2)}</span></div><div class="fin-card fin-incassi"><span class="fin-label">Incassi</span><span class="fin-value">€${totIncassi.toFixed(2)}</span></div><div class="fin-card fin-saldo"><span class="fin-label">Saldo</span><span class="fin-value">€${(totIncassi-totSpese).toFixed(2)}</span></div></div>`;
+  
+  const all = [...spese.map(x=>({...x,_t:'spesa'})), ...incassi.map(x=>({...x,_t:'incasso'}))].sort((a,b) => new Date(b.data) - new Date(a.data));
+  
+  html += '<div class="finanze-list">';
+  all.forEach(x => {
+    html += `<div class="list-item" onclick="open${x._t==='spesa'?'Spesa':'Incasso'}('${x.id}')"><span class="list-item-icon">${x._t==='spesa'?'💸':'💰'}</span><div class="list-item-content"><div class="list-item-title">${esc(x.descrizione||x.categoria||x.tipo||'-')}</div><div class="list-item-meta">${formatDate(x.data)}</div></div><span class="list-item-value ${x._t==='spesa'?'text-danger':'text-success'}">€${parseFloat(x.importo).toFixed(2)}</span></div>`;
+  });
+  html += '</div>';
+  document.getElementById('finanze-content').innerHTML = html;
+}
+
+// PRATICHE
+function renderPratiche() {
+  const items = state.pratiche.filter(p => p.stato !== 'chiusa');
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessuna pratica attiva</p>';
+  else items.forEach(p => {
+    html += `<div class="list-item" onclick="openPratica('${p.id}')"><span class="list-item-icon">📁</span><div class="list-item-content"><div class="list-item-title">${esc(p.codice)} - ${esc(p.cliente)}</div><div class="list-item-meta">${p.tipo||''} | ${p.stato}</div></div></div>`;
+  });
+  document.getElementById('pratiche-list').innerHTML = html;
+}
+
+// PROGETTI
+function renderProgetti() {
+  const items = state.progetti.filter(p => p.stato !== 'completato' && p.stato !== 'annullato');
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessun progetto attivo</p>';
+  else items.forEach(p => {
+    html += `<div class="list-item" onclick="openProgetto('${p.id}')"><span class="list-item-icon">📂</span><div class="list-item-content"><div class="list-item-title">${esc(p.codice)} - ${esc(p.nome)}</div><div class="list-item-meta">${p.stato}</div></div></div>`;
+  });
+  document.getElementById('progetti-list').innerHTML = html;
+}
+
+// ROUTINE
+function renderRoutine() {
+  const items = state.routine.filter(r => r.attiva !== false && r.attiva !== 'FALSE');
+  const today = getToday();
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessuna routine attiva</p>';
+  else items.forEach(r => {
+    const done = state.routine_log.some(l => l.routineId === r.id && formatDateISO(parseDate(l.data)) === today);
+    html += `<div class="list-item ${done?'completed':''}" onclick="toggleRoutineLog('${r.id}')"><span class="list-item-icon">${r.icona || '🔄'}</span><div class="list-item-content"><div class="list-item-title">${esc(r.nome)}</div><div class="list-item-meta">${r.frequenza}</div></div><span class="list-item-check">${done ? '✅' : '⬜'}</span></div>`;
+  });
+  document.getElementById('routine-list').innerHTML = html;
+}
+
+function toggleRoutineLog(routineId) {
+  const today = getToday();
+  const idx = state.routine_log.findIndex(l => l.routineId === routineId && formatDateISO(parseDate(l.data)) === today);
+  if (idx >= 0) {
+    const id = state.routine_log[idx].id;
+    state.routine_log.splice(idx, 1);
+    saveData(); syncDelete('routine_log', id);
+  } else {
+    const item = { id: genId(), routineId, data: today, timestamp: new Date().toISOString() };
+    state.routine_log.push(item);
+    saveData(); syncItem('routine_log', item);
+  }
+  render();
+}
+
+// OBIETTIVI
+function renderObiettivi() {
+  const items = state.obiettivi;
+  let html = '';
+  if (items.length === 0) html = '<p class="empty">Nessun obiettivo</p>';
+  else items.forEach(o => {
+    const pct = o.tipo === 'numerico' && o.target ? Math.min(100, Math.round((o.attuale||0) / o.target * 100)) : 0;
+    html += `<div class="list-item" onclick="openObiettivo('${o.id}')"><span class="list-item-icon">🎯</span><div class="list-item-content"><div class="list-item-title">${esc(o.descrizione)}</div><div class="list-item-meta">${o.periodo} ${o.tipo==='numerico' ? '| '+pct+'%' : ''}</div></div></div>`;
+  });
+  document.getElementById('obiettivi-list').innerHTML = html;
+}
+
+// ====== AGENDA IMPEGNI (Task + Memo) ======
+function renderAgendaImpegni() {
+  const view = state.agendaView;
+  const dateStr = state.agendaDate;
+  
+  let html = `<div class="agenda-controls">
+    <div class="agenda-nav">
+      <button onclick="agendaNav(-1)">◀</button>
+      <input type="date" value="${dateStr}" onchange="agendaDateChange(this.value)">
+      <button onclick="agendaNav(1)">▶</button>
+    </div>
+    <div class="agenda-views">
+      <button class="${view==='day'?'active':''}" onclick="setAgendaView('day')">Giorno</button>
+      <button class="${view==='week'?'active':''}" onclick="setAgendaView('week')">Settimana</button>
+      <button class="${view==='month'?'active':''}" onclick="setAgendaView('month')">Mese</button>
+      <button class="${view==='quarter'?'active':''}" onclick="setAgendaView('quarter')">Trimestre</button>
+    </div>
+  </div>`;
+  
+  html += '<div class="agenda-content">';
+  
+  if (view === 'day') {
+    html += renderAgendaDayView(dateStr, 'impegni');
+  } else if (view === 'week') {
+    html += renderAgendaWeekView(dateStr, 'impegni');
+  } else if (view === 'month') {
+    html += renderAgendaMonthView(dateStr, 'impegni');
+  } else if (view === 'quarter') {
+    html += renderAgendaQuarterView(dateStr, 'impegni');
+  }
+  
+  html += '</div>';
+  document.getElementById('agenda-impegni-content').innerHTML = html;
+}
+
+function setAgendaView(v) { state.agendaView = v; renderAgendaImpegni(); }
+function agendaDateChange(v) { state.agendaDate = v; renderAgendaImpegni(); }
+function agendaNav(dir) {
+  const d = new Date(state.agendaDate);
+  if (state.agendaView === 'day') d.setDate(d.getDate() + dir);
+  else if (state.agendaView === 'week') d.setDate(d.getDate() + (dir * 7));
+  else if (state.agendaView === 'month') d.setMonth(d.getMonth() + dir);
+  else if (state.agendaView === 'quarter') d.setMonth(d.getMonth() + (dir * 3));
+  state.agendaDate = d.toISOString().split('T')[0];
+  renderAgendaImpegni();
+}
+
+// ====== AGENDA EVENTI ======
+function renderAgendaEventi() {
+  const view = state.eventiView;
+  const dateStr = state.eventiDate;
+  
+  let html = `<div class="agenda-controls">
+    <div class="agenda-nav">
+      <button onclick="eventiNav(-1)">◀</button>
+      <input type="date" value="${dateStr}" onchange="eventiDateChange(this.value)">
+      <button onclick="eventiNav(1)">▶</button>
+    </div>
+    <div class="agenda-views">
+      <button class="${view==='day'?'active':''}" onclick="setEventiView('day')">Giorno</button>
+      <button class="${view==='week'?'active':''}" onclick="setEventiView('week')">Settimana</button>
+      <button class="${view==='month'?'active':''}" onclick="setEventiView('month')">Mese</button>
+      <button class="${view==='quarter'?'active':''}" onclick="setEventiView('quarter')">Trimestre</button>
+    </div>
+  </div>`;
+  
+  html += '<div class="agenda-content">';
+  
+  if (view === 'day') {
+    html += renderAgendaDayView(dateStr, 'eventi');
+  } else if (view === 'week') {
+    html += renderAgendaWeekView(dateStr, 'eventi');
+  } else if (view === 'month') {
+    html += renderAgendaMonthView(dateStr, 'eventi');
+  } else if (view === 'quarter') {
+    html += renderAgendaQuarterView(dateStr, 'eventi');
+  }
+  
+  html += '</div>';
+  document.getElementById('agenda-eventi-content').innerHTML = html;
+}
+
+function setEventiView(v) { state.eventiView = v; renderAgendaEventi(); }
+function eventiDateChange(v) { state.eventiDate = v; renderAgendaEventi(); }
+function eventiNav(dir) {
+  const d = new Date(state.eventiDate);
+  if (state.eventiView === 'day') d.setDate(d.getDate() + dir);
+  else if (state.eventiView === 'week') d.setDate(d.getDate() + (dir * 7));
+  else if (state.eventiView === 'month') d.setMonth(d.getMonth() + dir);
+  else if (state.eventiView === 'quarter') d.setMonth(d.getMonth() + (dir * 3));
+  state.eventiDate = d.toISOString().split('T')[0];
+  renderAgendaEventi();
+}
+
+// VISTA GIORNO (con ore 07:00-21:00)
+function renderAgendaDayView(dateStr, tipo) {
+  const date = new Date(dateStr);
+  const dayName = date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  
+  let items = [];
+  if (tipo === 'impegni') {
+    // Task e Memo del giorno
+    const tasks = state.tasks.filter(t => formatDateISO(parseDate(t.scadenza)) === dateStr && t.stato !== 'completato');
+    const memos = state.inbox.filter(m => formatDateISO(parseDate(m.scadenza)) === dateStr && !m.processato);
+    items = [...tasks.map(t => ({...t, _tipo: 'task'})), ...memos.map(m => ({...m, _tipo: 'memo'}))];
+  } else {
+    items = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === dateStr).map(e => ({...e, _tipo: 'evento'}));
+  }
+  
+  let html = `<h3>${dayName}</h3>`;
+  html += '<div class="day-view">';
+  
+  // Griglia oraria 07:00 - 21:00
+  let currentMinute = 7 * 60; // 07:00 in minuti
+  const endMinute = 21 * 60; // 21:00
+  
+  if (tipo === 'eventi') {
+    // Eventi hanno orario specifico
+    for (let h = 7; h <= 21; h++) {
+      const hourItems = items.filter(e => {
+        if (!e.ora) return h === 7; // Senza ora, metti alle 7
+        const [hh] = e.ora.split(':').map(Number);
+        return hh === h;
+      });
+      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content">`;
+      hourItems.forEach(e => {
+        const dur = parseInt(e.durata) || 60;
+        html += `<div class="agenda-item evento" style="height:${Math.max(24, dur/2)}px" onclick="openEvento('${e.id}')"><span class="item-title">${esc(e.titolo)}</span><span class="item-meta">${e.ora||''} ${dur}min</span></div>`;
+      });
+      html += '</div></div>';
+    }
+  } else {
+    // Task/Memo: impilati in sequenza dalle 07:00
+    for (let h = 7; h <= 21; h++) {
+      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content" id="hour-${h}"></div></div>`;
+    }
+    html += '</div>';
+    
+    // Calcola posizionamento
+    let posHtml = '<div class="stacked-items">';
+    let accMins = 7 * 60;
+    items.forEach(item => {
+      const dur = parseInt(item.durata) || 30;
+      const startHour = Math.floor(accMins / 60);
+      const icon = item._tipo === 'task' ? '✅' : '📝';
+      if (accMins < endMinute) {
+        posHtml += `<div class="agenda-item ${item._tipo}" onclick="open${item._tipo==='task'?'Task':'Memo'}('${item.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(item.titolo)}</span><span class="item-meta">${dur}min</span></div>`;
+      }
+      accMins += dur;
+    });
+    posHtml += '</div>';
+    
+    // Sommario totale
+    const totalMins = items.reduce((s, i) => s + (parseInt(i.durata) || 30), 0);
+    html += `<div class="day-summary"><strong>Totale impegni: ${Math.floor(totalMins/60)}h ${totalMins%60}m</strong> (${items.length} elementi)</div>`;
+    html += posHtml;
+    return html;
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+// VISTA SETTIMANA
+function renderAgendaWeekView(dateStr, tipo) {
+  const date = new Date(dateStr);
+  const dayOfWeek = date.getDay();
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  
+  const days = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+  
+  let html = '<div class="week-view"><div class="week-header">';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const isToday = formatDateISO(d) === getToday();
+    html += `<div class="week-day-header ${isToday?'today':''}">${days[i]}<br>${d.getDate()}</div>`;
+  }
+  html += '</div><div class="week-body">';
+  
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const ds = formatDateISO(d);
+    
+    let items = [];
+    if (tipo === 'impegni') {
+      const tasks = state.tasks.filter(t => formatDateISO(parseDate(t.scadenza)) === ds && t.stato !== 'completato');
+      const memos = state.inbox.filter(m => formatDateISO(parseDate(m.scadenza)) === ds && !m.processato);
+      items = [...tasks.map(t=>({...t,_t:'task'})), ...memos.map(m=>({...m,_t:'memo'}))];
+    } else {
+      items = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === ds);
+    }
+    
+    const totalMins = items.reduce((s,i) => s + (parseInt(i.durata)||30), 0);
+    
+    html += `<div class="week-day-col"><div class="week-day-content">`;
+    items.slice(0, 4).forEach(item => {
+      const icon = tipo === 'eventi' ? '📅' : (item._t === 'task' ? '✅' : '📝');
+      html += `<div class="week-item">${icon} ${esc((item.titolo||'').substring(0,15))}</div>`;
+    });
+    if (items.length > 4) html += `<div class="week-item more">+${items.length - 4} altri</div>`;
+    if (items.length > 0) html += `<div class="week-total">${Math.floor(totalMins/60)}h${totalMins%60}m</div>`;
+    html += '</div></div>';
+  }
+  html += '</div></div>';
+  return html;
+}
+
+// VISTA MESE
+function renderAgendaMonthView(dateStr, tipo) {
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startPad = (firstDay.getDay() + 6) % 7; // Lunedì = 0
+  
+  const monthName = date.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+  
+  let html = `<h3>${monthName}</h3><div class="month-view"><div class="month-header">`;
+  ['L','M','M','G','V','S','D'].forEach(d => html += `<div class="month-day-header">${d}</div>`);
+  html += '</div><div class="month-body">';
+  
+  for (let i = 0; i < startPad; i++) html += '<div class="month-day empty"></div>';
+  
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const ds = `${year}-${(month+1).toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
+    const isToday = ds === getToday();
+    
+    let count = 0;
+    if (tipo === 'impegni') {
+      count = state.tasks.filter(t => formatDateISO(parseDate(t.scadenza)) === ds && t.stato !== 'completato').length;
+      count += state.inbox.filter(m => formatDateISO(parseDate(m.scadenza)) === ds && !m.processato).length;
+    } else {
+      count = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === ds).length;
+    }
+    
+    html += `<div class="month-day ${isToday?'today':''}" onclick="state.agendaDate='${ds}';state.agendaView='day';render()"><span class="day-num">${day}</span>${count > 0 ? '<span class="day-count">'+count+'</span>' : ''}</div>`;
+  }
+  
+  html += '</div></div>';
+  return html;
+}
+
+// VISTA TRIMESTRE
+function renderAgendaQuarterView(dateStr, tipo) {
+  const date = new Date(dateStr);
+  const currentMonth = date.getMonth();
+  const quarterStart = Math.floor(currentMonth / 3) * 3;
+  
+  let html = '<div class="quarter-view">';
+  
+  for (let m = 0; m < 3; m++) {
+    const monthDate = new Date(date.getFullYear(), quarterStart + m, 1);
+    const monthName = monthDate.toLocaleDateString('it-IT', { month: 'short' });
+    const lastDay = new Date(date.getFullYear(), quarterStart + m + 1, 0).getDate();
+    
+    html += `<div class="quarter-month"><h4>${monthName}</h4><div class="quarter-days">`;
+    
+    for (let day = 1; day <= lastDay; day++) {
+      const ds = `${date.getFullYear()}-${(quarterStart+m+1).toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
+      let count = 0;
+      if (tipo === 'impegni') {
+        count = state.tasks.filter(t => formatDateISO(parseDate(t.scadenza)) === ds && t.stato !== 'completato').length;
+        count += state.inbox.filter(i => formatDateISO(parseDate(i.scadenza)) === ds && !i.processato).length;
+      } else {
+        count = state.eventi.filter(e => formatDateISO(parseDate(e.data)) === ds).length;
+      }
+      const hasItems = count > 0;
+      html += `<div class="quarter-day ${hasItems?'has-items':''}" title="${ds}: ${count}">${day}</div>`;
+    }
+    
+    html += '</div></div>';
+  }
+  
+  html += '</div>';
+  return html;
+}
+
+// CRUD MEMO
+function openNewMemo() {
+  state.editingId = null;
+  document.getElementById('memo-titolo').value = '';
+  document.getElementById('memo-testo').value = '';
+  document.getElementById('memo-scadenza').value = '';
+  document.getElementById('memo-durata').value = '';
+  document.getElementById('memo-urgente').checked = false;
+  document.getElementById('btn-del-memo').style.display = 'none';
+  openModal('modal-memo');
+}
+
+function openMemo(id) {
+  const m = state.inbox.find(x => x.id === id);
+  if (!m) return;
+  state.editingId = id;
+  document.getElementById('memo-titolo').value = m.titolo || m.testo || '';
+  document.getElementById('memo-testo').value = m.testo || '';
+  document.getElementById('memo-scadenza').value = m.scadenza ? formatDateISO(parseDate(m.scadenza)) : '';
+  document.getElementById('memo-durata').value = m.durata || '';
+  document.getElementById('memo-urgente').checked = m.urgente || false;
+  document.getElementById('btn-del-memo').style.display = 'inline-block';
+  openModal('modal-memo');
+}
+
+function saveMemo() {
+  const titolo = document.getElementById('memo-titolo').value.trim();
+  if (!titolo) { toast('Inserisci titolo'); return; }
+  const item = { 
+    id: state.editingId || genId(), 
+    titolo, 
+    testo: document.getElementById('memo-testo').value,
+    scadenza: document.getElementById('memo-scadenza').value,
+    durata: document.getElementById('memo-durata').value,
+    urgente: document.getElementById('memo-urgente').checked,
+    processato: false,
+    timestamp: new Date().toISOString() 
+  };
+  if (state.editingId) { const i = state.inbox.findIndex(x => x.id === state.editingId); if (i >= 0) state.inbox[i] = item; }
+  else state.inbox.push(item);
+  closeModal('modal-memo'); saveData(); syncItem('inbox', item); render(); updateStats(); toast('Salvato!');
+}
+
+function deleteMemo() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.inbox = state.inbox.filter(x => x.id !== state.editingId);
+  closeModal('modal-memo'); saveData(); syncDelete('inbox', state.editingId); render(); updateStats(); toast('Eliminato');
+}
+
+// CRUD TASK
+function openNewTask() {
+  state.editingId = null;
+  document.getElementById('task-titolo').value = '';
+  document.getElementById('task-descrizione').value = '';
+  document.getElementById('task-scadenza').value = '';
+  document.getElementById('task-durata').value = '';
+  document.getElementById('task-priorita').value = 'media';
+  document.getElementById('task-stato').value = 'da_fare';
+  document.getElementById('task-codice').value = '';
+  document.getElementById('btn-del-task').style.display = 'none';
+  openModal('modal-task');
+}
+
+function openTask(id) {
+  const t = state.tasks.find(x => x.id === id);
+  if (!t) return;
+  state.editingId = id;
+  document.getElementById('task-titolo').value = t.titolo || '';
+  document.getElementById('task-descrizione').value = t.descrizione || '';
+  document.getElementById('task-scadenza').value = t.scadenza ? formatDateISO(parseDate(t.scadenza)) : '';
+  document.getElementById('task-durata').value = t.durata || '';
+  document.getElementById('task-priorita').value = t.priorita || 'media';
+  document.getElementById('task-stato').value = t.stato || 'da_fare';
+  document.getElementById('task-codice').value = t.codice || '';
+  document.getElementById('btn-del-task').style.display = 'inline-block';
+  openModal('modal-task');
+}
+
+function saveTask() {
+  const titolo = document.getElementById('task-titolo').value.trim();
+  if (!titolo) { toast('Inserisci titolo'); return; }
+  const item = { 
+    id: state.editingId || genId(), 
+    titolo, 
+    descrizione: document.getElementById('task-descrizione').value, 
+    scadenza: document.getElementById('task-scadenza').value, 
+    durata: document.getElementById('task-durata').value,
+    priorita: document.getElementById('task-priorita').value, 
+    stato: document.getElementById('task-stato').value, 
+    codice: document.getElementById('task-codice').value, 
+    creato: new Date().toISOString() 
+  };
+  if (state.editingId) { const i = state.tasks.findIndex(x => x.id === state.editingId); if (i >= 0) state.tasks[i] = item; }
+  else state.tasks.push(item);
+  closeModal('modal-task'); saveData(); syncItem('tasks', item); render(); updateStats(); toast('Salvato!');
+}
+
+function deleteTask() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.tasks = state.tasks.filter(x => x.id !== state.editingId);
+  closeModal('modal-task'); saveData(); syncDelete('tasks', state.editingId); render(); updateStats(); toast('Eliminato');
+}
+
+// CRUD EVENTO
+function openNewEvento() {
+  state.editingId = null;
+  document.getElementById('evento-titolo').value = '';
+  document.getElementById('evento-data').value = getToday();
+  document.getElementById('evento-ora').value = '';
+  document.getElementById('evento-durata').value = '';
+  document.getElementById('evento-luogo').value = '';
+  document.getElementById('evento-note').value = '';
+  document.getElementById('btn-del-evento').style.display = 'none';
+  openModal('modal-evento');
+}
+
+function openEvento(id) {
+  const e = state.eventi.find(x => x.id === id);
+  if (!e) return;
+  state.editingId = id;
+  document.getElementById('evento-titolo').value = e.titolo || '';
+  document.getElementById('evento-data').value = e.data ? formatDateISO(parseDate(e.data)) : '';
+  document.getElementById('evento-ora').value = e.ora || '';
+  document.getElementById('evento-durata').value = e.durata || '';
+  document.getElementById('evento-luogo').value = e.luogo || '';
+  document.getElementById('evento-note').value = e.note || '';
+  document.getElementById('btn-del-evento').style.display = 'inline-block';
+  openModal('modal-evento');
+}
+
+function saveEvento() {
+  const titolo = document.getElementById('evento-titolo').value.trim();
+  const data = document.getElementById('evento-data').value;
+  if (!titolo || !data) { toast('Inserisci titolo e data'); return; }
+  const item = { 
+    id: state.editingId || genId(), 
+    titolo, 
+    data, 
+    ora: document.getElementById('evento-ora').value, 
+    durata: document.getElementById('evento-durata').value,
+    luogo: document.getElementById('evento-luogo').value, 
+    note: document.getElementById('evento-note').value, 
+    timestamp: new Date().toISOString() 
+  };
+  if (state.editingId) { const i = state.eventi.findIndex(x => x.id === state.editingId); if (i >= 0) state.eventi[i] = item; }
+  else state.eventi.push(item);
+  closeModal('modal-evento'); saveData(); syncItem('eventi', item); render(); updateStats(); toast('Salvato!');
+}
+
+function deleteEvento() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.eventi = state.eventi.filter(x => x.id !== state.editingId);
+  closeModal('modal-evento'); saveData(); syncDelete('eventi', state.editingId); render(); updateStats(); toast('Eliminato');
+}
+
+// CRUD PRATICA
+function openNewPratica() {
+  state.editingId = null;
+  document.getElementById('pratica-codice').value = '';
+  document.getElementById('pratica-cliente').value = '';
+  document.getElementById('pratica-tipo').value = '';
+  document.getElementById('pratica-stato').value = 'aperta';
+  document.getElementById('btn-del-pratica').style.display = 'none';
+  openModal('modal-pratica');
+}
+
+function openPratica(id) {
+  const p = state.pratiche.find(x => x.id === id);
+  if (!p) return;
+  state.editingId = id;
+  document.getElementById('pratica-codice').value = p.codice || '';
+  document.getElementById('pratica-cliente').value = p.cliente || '';
+  document.getElementById('pratica-tipo').value = p.tipo || '';
+  document.getElementById('pratica-stato').value = p.stato || 'aperta';
+  document.getElementById('btn-del-pratica').style.display = 'inline-block';
+  openModal('modal-pratica');
+}
+
+function savePratica() {
+  const codice = document.getElementById('pratica-codice').value.trim();
+  const cliente = document.getElementById('pratica-cliente').value.trim();
+  if (!codice || !cliente) { toast('Inserisci codice e cliente'); return; }
+  const item = { id: state.editingId || genId(), codice, cliente, tipo: document.getElementById('pratica-tipo').value, stato: document.getElementById('pratica-stato').value, timestamp: new Date().toISOString() };
+  if (state.editingId) { const i = state.pratiche.findIndex(x => x.id === state.editingId); if (i >= 0) state.pratiche[i] = item; }
+  else state.pratiche.push(item);
+  closeModal('modal-pratica'); saveData(); syncItem('pratiche', item); render(); toast('Salvato!');
+}
+
+function deletePratica() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.pratiche = state.pratiche.filter(x => x.id !== state.editingId);
+  closeModal('modal-pratica'); saveData(); syncDelete('pratiche', state.editingId); render(); toast('Eliminato');
+}
+
+// CRUD PROGETTO
+function openNewProgetto() {
+  state.editingId = null;
+  document.getElementById('progetto-codice').value = '';
+  document.getElementById('progetto-nome').value = '';
+  document.getElementById('progetto-stato').value = 'pianificato';
+  document.getElementById('btn-del-progetto').style.display = 'none';
+  openModal('modal-progetto');
+}
+
+function openProgetto(id) {
+  const p = state.progetti.find(x => x.id === id);
+  if (!p) return;
+  state.editingId = id;
+  document.getElementById('progetto-codice').value = p.codice || '';
+  document.getElementById('progetto-nome').value = p.nome || '';
+  document.getElementById('progetto-stato').value = p.stato || 'pianificato';
+  document.getElementById('btn-del-progetto').style.display = 'inline-block';
+  openModal('modal-progetto');
+}
+
+function saveProgetto() {
+  const codice = document.getElementById('progetto-codice').value.trim();
+  const nome = document.getElementById('progetto-nome').value.trim();
+  if (!codice || !nome) { toast('Inserisci codice e nome'); return; }
+  const item = { id: state.editingId || genId(), codice, nome, stato: document.getElementById('progetto-stato').value, timestamp: new Date().toISOString() };
+  if (state.editingId) { const i = state.progetti.findIndex(x => x.id === state.editingId); if (i >= 0) state.progetti[i] = item; }
+  else state.progetti.push(item);
+  closeModal('modal-progetto'); saveData(); syncItem('progetti', item); render(); toast('Salvato!');
+}
+
+function deleteProgetto() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.progetti = state.progetti.filter(x => x.id !== state.editingId);
+  closeModal('modal-progetto'); saveData(); syncDelete('progetti', state.editingId); render(); toast('Eliminato');
+}
+
+// CRUD ROUTINE
+function openNewRoutine() {
+  state.editingId = null;
+  document.getElementById('routine-nome').value = '';
+  document.getElementById('routine-icona').value = '';
+  document.getElementById('routine-frequenza').value = 'giornaliera';
+  document.getElementById('btn-del-routine').style.display = 'none';
+  openModal('modal-routine');
+}
+
+function openRoutine(id) {
+  const r = state.routine.find(x => x.id === id);
+  if (!r) return;
+  state.editingId = id;
+  document.getElementById('routine-nome').value = r.nome || '';
+  document.getElementById('routine-icona').value = r.icona || '';
+  document.getElementById('routine-frequenza').value = r.frequenza || 'giornaliera';
+  document.getElementById('btn-del-routine').style.display = 'inline-block';
+  openModal('modal-routine');
+}
+
+function saveRoutine() {
+  const nome = document.getElementById('routine-nome').value.trim();
+  if (!nome) { toast('Inserisci nome'); return; }
+  const item = { id: state.editingId || genId(), nome, icona: document.getElementById('routine-icona').value, frequenza: document.getElementById('routine-frequenza').value, attiva: true, timestamp: new Date().toISOString() };
+  if (state.editingId) { const i = state.routine.findIndex(x => x.id === state.editingId); if (i >= 0) state.routine[i] = item; }
+  else state.routine.push(item);
+  closeModal('modal-routine'); saveData(); syncItem('routine', item); render(); toast('Salvato!');
+}
+
+function deleteRoutine() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.routine = state.routine.filter(x => x.id !== state.editingId);
+  closeModal('modal-routine'); saveData(); syncDelete('routine', state.editingId); render(); toast('Eliminato');
+}
+
+// CRUD OBIETTIVO
+function openNewObiettivo() {
+  state.editingId = null;
+  document.getElementById('obiettivo-descrizione').value = '';
+  document.getElementById('obiettivo-periodo').value = 'mensile';
+  document.getElementById('obiettivo-target').value = '';
+  document.getElementById('btn-del-obiettivo').style.display = 'none';
+  openModal('modal-obiettivo');
+}
+
+function openObiettivo(id) {
+  const o = state.obiettivi.find(x => x.id === id);
+  if (!o) return;
+  state.editingId = id;
+  document.getElementById('obiettivo-descrizione').value = o.descrizione || '';
+  document.getElementById('obiettivo-periodo').value = o.periodo || 'mensile';
+  document.getElementById('obiettivo-target').value = o.target || '';
+  document.getElementById('btn-del-obiettivo').style.display = 'inline-block';
+  openModal('modal-obiettivo');
+}
+
+function saveObiettivo() {
+  const desc = document.getElementById('obiettivo-descrizione').value.trim();
+  if (!desc) { toast('Inserisci descrizione'); return; }
+  const item = { id: state.editingId || genId(), descrizione: desc, periodo: document.getElementById('obiettivo-periodo').value, target: document.getElementById('obiettivo-target').value, attuale: 0, creato: new Date().toISOString() };
+  if (state.editingId) { const i = state.obiettivi.findIndex(x => x.id === state.editingId); if (i >= 0) state.obiettivi[i] = item; }
+  else state.obiettivi.push(item);
+  closeModal('modal-obiettivo'); saveData(); syncItem('obiettivi', item); render(); toast('Salvato!');
+}
+
+function deleteObiettivo() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.obiettivi = state.obiettivi.filter(x => x.id !== state.editingId);
+  closeModal('modal-obiettivo'); saveData(); syncDelete('obiettivi', state.editingId); render(); toast('Eliminato');
+}
+
+// TIMER
+function updateTimerDisplay() {
+  if (state.timer.active && state.timer.startTime) {
+    const secs = Math.floor((new Date() - new Date(state.timer.startTime)) / 1000);
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    document.getElementById('timer-time').textContent = pad(h) + ':' + pad(m) + ':' + pad(s);
+    document.getElementById('timer-desc').textContent = state.timer.desc;
+  }
+}
+
+function openStartTimer() {
+  document.getElementById('timer-descrizione').value = '';
+  document.getElementById('timer-codice').value = '';
+  document.getElementById('timer-tipo').value = 'task';
+  document.getElementById('timer-fatturabile').checked = true;
+  openModal('modal-start-timer');
+}
+
+function startTimer() {
+  const desc = document.getElementById('timer-descrizione').value.trim();
+  if (!desc) { toast('Inserisci descrizione'); return; }
+  state.timer = { active: true, startTime: new Date().toISOString(), desc, codice: document.getElementById('timer-codice').value, tipo: document.getElementById('timer-tipo').value, fatturabile: document.getElementById('timer-fatturabile').checked };
+  saveTimer();
+  closeModal('modal-start-timer');
+  document.getElementById('btn-start').style.display = 'none';
+  document.getElementById('btn-stop').style.display = 'inline-block';
+  toast('Timer avviato!');
+}
+
+function stopTimer() {
+  if (!state.timer.active) return;
+  const secs = Math.floor((new Date() - new Date(state.timer.startTime)) / 1000);
+  const mins = Math.max(1, Math.round(secs / 60));
+  document.getElementById('stop-timer-desc').textContent = state.timer.desc;
+  document.getElementById('stop-timer-time').textContent = mins + ' minuti';
+  document.getElementById('stop-timer-note').value = '';
+  openModal('modal-stop-timer');
+}
+
+function saveTimerLog() {
+  const secs = Math.floor((new Date() - new Date(state.timer.startTime)) / 1000);
+  const mins = Math.max(1, Math.round(secs / 60));
+  const item = { id: genId(), data: getToday(), descrizione: state.timer.desc, codice: state.timer.codice, tipo: state.timer.tipo, minuti: mins, fatturabile: state.timer.fatturabile, note: document.getElementById('stop-timer-note').value, timestamp: new Date().toISOString() };
+  state.time_log.push(item);
+  resetTimer();
+  closeModal('modal-stop-timer');
+  saveData(); syncItem('time_log', item); render(); updateStats(); toast('Tempo salvato!');
+}
+
+function discardTimer() {
+  if (!confirm('Scartare tempo?')) return;
+  resetTimer();
+  closeModal('modal-stop-timer');
+  toast('Timer scartato');
+}
+
+function resetTimer() {
+  state.timer = { active: false, startTime: null, desc: '', codice: '', tipo: 'task', fatturabile: true };
+  saveTimer();
+  document.getElementById('btn-start').style.display = 'inline-block';
+  document.getElementById('btn-stop').style.display = 'none';
+  document.getElementById('timer-time').textContent = '00:00:00';
+  document.getElementById('timer-desc').textContent = '';
+}
+
+// CRUD SPESA
+function openNewSpesa() {
+  state.editingId = null;
+  document.getElementById('spesa-data').value = getToday();
+  document.getElementById('spesa-importo').value = '';
+  document.getElementById('spesa-categoria').value = '';
+  document.getElementById('spesa-descrizione').value = '';
+  document.getElementById('btn-del-spesa').style.display = 'none';
+  openModal('modal-spesa');
+}
+
+function openSpesa(id) {
+  const s = state.spese.find(x => x.id === id);
+  if (!s) return;
+  state.editingId = id;
+  document.getElementById('spesa-data').value = formatDateISO(parseDate(s.data));
+  document.getElementById('spesa-importo').value = s.importo || '';
+  document.getElementById('spesa-categoria').value = s.categoria || '';
+  document.getElementById('spesa-descrizione').value = s.descrizione || '';
+  document.getElementById('btn-del-spesa').style.display = 'inline-block';
+  openModal('modal-spesa');
+}
+
+function saveSpesa() {
+  const data = document.getElementById('spesa-data').value;
+  const importo = document.getElementById('spesa-importo').value;
+  if (!data || !importo) { toast('Inserisci data e importo'); return; }
+  const item = { id: state.editingId || genId(), data, importo: parseFloat(importo), categoria: document.getElementById('spesa-categoria').value, descrizione: document.getElementById('spesa-descrizione').value, timestamp: new Date().toISOString() };
+  if (state.editingId) { const i = state.spese.findIndex(x => x.id === state.editingId); if (i >= 0) state.spese[i] = item; }
+  else state.spese.push(item);
+  closeModal('modal-spesa'); saveData(); syncItem('spese', item); render(); toast('Salvato!');
+}
+
+function deleteSpesa() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.spese = state.spese.filter(x => x.id !== state.editingId);
+  closeModal('modal-spesa'); saveData(); syncDelete('spese', state.editingId); render(); toast('Eliminato');
+}
+
+// CRUD INCASSO
+function openNewIncasso() {
+  state.editingId = null;
+  document.getElementById('incasso-data').value = getToday();
+  document.getElementById('incasso-importo').value = '';
+  document.getElementById('incasso-tipo').value = 'fattura';
+  document.getElementById('incasso-descrizione').value = '';
+  document.getElementById('btn-del-incasso').style.display = 'none';
+  openModal('modal-incasso');
+}
+
+function openIncasso(id) {
+  const s = state.incassi.find(x => x.id === id);
+  if (!s) return;
+  state.editingId = id;
+  document.getElementById('incasso-data').value = formatDateISO(parseDate(s.data));
+  document.getElementById('incasso-importo').value = s.importo || '';
+  document.getElementById('incasso-tipo').value = s.tipo || 'fattura';
+  document.getElementById('incasso-descrizione').value = s.descrizione || '';
+  document.getElementById('btn-del-incasso').style.display = 'inline-block';
+  openModal('modal-incasso');
+}
+
+function saveIncasso() {
+  const data = document.getElementById('incasso-data').value;
+  const importo = document.getElementById('incasso-importo').value;
+  if (!data || !importo) { toast('Inserisci data e importo'); return; }
+  const item = { id: state.editingId || genId(), data, importo: parseFloat(importo), tipo: document.getElementById('incasso-tipo').value, descrizione: document.getElementById('incasso-descrizione').value, timestamp: new Date().toISOString() };
+  if (state.editingId) { const i = state.incassi.findIndex(x => x.id === state.editingId); if (i >= 0) state.incassi[i] = item; }
+  else state.incassi.push(item);
+  closeModal('modal-incasso'); saveData(); syncItem('incassi', item); render(); toast('Salvato!');
+}
+
+function deleteIncasso() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  state.incassi = state.incassi.filter(x => x.id !== state.editingId);
+  closeModal('modal-incasso'); saveData(); syncDelete('incassi', state.editingId); render(); toast('Eliminato');
+}
+
+// UTILITIES
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,9); }
+function getToday() { return new Date().toISOString().split('T')[0]; }
+function pad(n) { return n.toString().padStart(2, '0'); }
+function parseDate(val) { if (!val) return null; return new Date(val); }
+function formatDate(val) { const d = parseDate(val); if (!d || isNaN(d)) return ''; return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }); }
+function formatDateISO(d) { if (!d || isNaN(d)) return ''; return d.toISOString().split('T')[0]; }
+function esc(str) { if (!str) return ''; return String(str).replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2500); }
+function showSyncPopup() { document.getElementById('sync-popup').classList.add('show'); }
+function hideSyncPopup() { document.getElementById('sync-popup').classList.remove('show'); }
+
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(e => {}); }
