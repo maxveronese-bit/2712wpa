@@ -700,8 +700,9 @@ function saveMemo() {
 
 function deleteMemo() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.inbox = state.inbox.filter(x => x.id !== state.editingId);
-  closeModal('modal-memo'); saveData(); syncDelete('inbox', state.editingId); render(); updateStats(); toast('Eliminato');
+  const id = state.editingId;
+  state.inbox = state.inbox.filter(x => x.id !== id);
+  closeModal('modal-memo'); saveData(); syncDelete('inbox', id); render(); updateStats(); toast('Eliminato');
 }
 
 // CRUD TASK
@@ -754,8 +755,9 @@ function saveTask() {
 
 function deleteTask() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.tasks = state.tasks.filter(x => x.id !== state.editingId);
-  closeModal('modal-task'); saveData(); syncDelete('tasks', state.editingId); render(); updateStats(); toast('Eliminato');
+  const id = state.editingId;
+  state.tasks = state.tasks.filter(x => x.id !== id);
+  closeModal('modal-task'); saveData(); syncDelete('tasks', id); render(); updateStats(); toast('Eliminato');
 }
 
 // CRUD EVENTO
@@ -806,8 +808,9 @@ function saveEvento() {
 
 function deleteEvento() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.eventi = state.eventi.filter(x => x.id !== state.editingId);
-  closeModal('modal-evento'); saveData(); syncDelete('eventi', state.editingId); render(); updateStats(); toast('Eliminato');
+  const id = state.editingId;
+  state.eventi = state.eventi.filter(x => x.id !== id);
+  closeModal('modal-evento'); saveData(); syncDelete('eventi', id); render(); updateStats(); toast('Eliminato');
 }
 
 // CRUD PRATICA
@@ -845,8 +848,9 @@ function savePratica() {
 
 function deletePratica() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.pratiche = state.pratiche.filter(x => x.id !== state.editingId);
-  closeModal('modal-pratica'); saveData(); syncDelete('pratiche', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.pratiche = state.pratiche.filter(x => x.id !== id);
+  closeModal('modal-pratica'); saveData(); syncDelete('pratiche', id); render(); toast('Eliminato');
 }
 
 // CRUD PROGETTO
@@ -882,8 +886,9 @@ function saveProgetto() {
 
 function deleteProgetto() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.progetti = state.progetti.filter(x => x.id !== state.editingId);
-  closeModal('modal-progetto'); saveData(); syncDelete('progetti', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.progetti = state.progetti.filter(x => x.id !== id);
+  closeModal('modal-progetto'); saveData(); syncDelete('progetti', id); render(); toast('Eliminato');
 }
 
 // CRUD ROUTINE
@@ -918,8 +923,9 @@ function saveRoutine() {
 
 function deleteRoutine() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.routine = state.routine.filter(x => x.id !== state.editingId);
-  closeModal('modal-routine'); saveData(); syncDelete('routine', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.routine = state.routine.filter(x => x.id !== id);
+  closeModal('modal-routine'); saveData(); syncDelete('routine', id); render(); toast('Eliminato');
 }
 
 // CRUD OBIETTIVO
@@ -954,8 +960,9 @@ function saveObiettivo() {
 
 function deleteObiettivo() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.obiettivi = state.obiettivi.filter(x => x.id !== state.editingId);
-  closeModal('modal-obiettivo'); saveData(); syncDelete('obiettivi', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.obiettivi = state.obiettivi.filter(x => x.id !== id);
+  closeModal('modal-obiettivo'); saveData(); syncDelete('obiettivi', id); render(); toast('Eliminato');
 }
 
 // TIMER
@@ -1060,8 +1067,9 @@ function saveSpesa() {
 
 function deleteSpesa() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.spese = state.spese.filter(x => x.id !== state.editingId);
-  closeModal('modal-spesa'); saveData(); syncDelete('spese', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.spese = state.spese.filter(x => x.id !== id);
+  closeModal('modal-spesa'); saveData(); syncDelete('spese', id); render(); toast('Eliminato');
 }
 
 // CRUD INCASSO
@@ -1099,8 +1107,9 @@ function saveIncasso() {
 
 function deleteIncasso() {
   if (!state.editingId || !confirm('Eliminare?')) return;
-  state.incassi = state.incassi.filter(x => x.id !== state.editingId);
-  closeModal('modal-incasso'); saveData(); syncDelete('incassi', state.editingId); render(); toast('Eliminato');
+  const id = state.editingId;
+  state.incassi = state.incassi.filter(x => x.id !== id);
+  closeModal('modal-incasso'); saveData(); syncDelete('incassi', id); render(); toast('Eliminato');
 }
 
 // UTILITIES
