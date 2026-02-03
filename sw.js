@@ -1,4 +1,4 @@
-const CACHE_NAME = 'personalos-v5.1';
+const CACHE_NAME = '2712wpa';
 const FILES = ['/', '/index.html', '/app.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
