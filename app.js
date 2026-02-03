@@ -95,11 +95,21 @@ function mergeServerData(data) {
   Object.keys(keyMap).forEach(k => {
     if (data[k] && !data[keyMap[k]]) data[keyMap[k]] = data[k];
   });
-  ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'].forEach(k => {
-    const serverItems = data[k] || [];
-    const localMap = new Map(state[k].map(i => [i.id, i]));
-    serverItems.forEach(item => { if (item.id) localMap.set(item.id, item); });
-    state[k] = Array.from(localMap.values());
+  const allKeys = ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'];
+  const reverseKeyMap = {};
+  Object.keys(keyMap).forEach(k => { reverseKeyMap[keyMap[k]] = k; });
+  
+  allKeys.forEach(k => {
+    // Controlla se il server ha dati per questa chiave (anche array vuoto)
+    const serverKey = reverseKeyMap[k] || k;
+    const hasServerData = data.hasOwnProperty(k) || data.hasOwnProperty(serverKey);
+    
+    if (hasServerData) {
+      // Server è fonte di verità: sostituisci locale con server
+      const serverItems = data[k] || data[serverKey] || [];
+      state[k] = serverItems.filter(i => i.id);
+    }
+    // Se server non ha questa chiave, mantieni locale (modalità offline)
   });
 }
 
