@@ -61,11 +61,13 @@ async function autoSync() {
   if (!url) return;
   showSyncPopup();
   try {
+    // STEP 1: Scarica dati dal server (fonte di verità)
     const resp = await fetch(url + '?action=read');
     const result = await resp.json();
     const data = result.data || result;
     if (data && (data.inbox || data.tasks || data.eventi)) {
-      mergeServerData(data);
+      // STEP 2: Sostituisci locale con server
+      replaceLocalWithServer(data);
       saveData(); render(); updateStats();
       toast('✅ Sincronizzato!');
     }
@@ -78,11 +80,12 @@ async function manualSync() {
   if (!url) { toast('Configura URL API'); openSettings(); return; }
   showSyncPopup();
   try {
+    // Scarica dati dal server e sostituisci locale
     const resp = await fetch(url + '?action=read');
     const result = await resp.json();
     const data = result.data || result;
     if (data && (data.inbox || data.tasks || data.eventi)) {
-      mergeServerData(data);
+      replaceLocalWithServer(data);
       saveData(); render(); updateStats();
       toast('✅ Sincronizzato!');
     } else { toast('Nessun dato trovato'); }
@@ -90,26 +93,22 @@ async function manualSync() {
   hideSyncPopup();
 }
 
-function mergeServerData(data) {
-  const keyMap = { 'routineLog': 'routine_log', 'timeLog': 'time_log' };
-  Object.keys(keyMap).forEach(k => {
-    if (data[k] && !data[keyMap[k]]) data[keyMap[k]] = data[k];
-  });
-  const allKeys = ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'];
-  const reverseKeyMap = {};
-  Object.keys(keyMap).forEach(k => { reverseKeyMap[keyMap[k]] = k; });
+function replaceLocalWithServer(data) {
+  // Mappa chiavi server → chiavi locali
+  const keyMap = {
+    'inbox': 'inbox', 'tasks': 'tasks', 'eventi': 'eventi',
+    'pratiche': 'pratiche', 'progetti': 'progetti', 'routine': 'routine',
+    'routineLog': 'routine_log', 'routine_log': 'routine_log',
+    'obiettivi': 'obiettivi', 'spese': 'spese', 'incassi': 'incassi',
+    'timeLog': 'time_log', 'time_log': 'time_log'
+  };
   
-  allKeys.forEach(k => {
-    // Controlla se il server ha dati per questa chiave (anche array vuoto)
-    const serverKey = reverseKeyMap[k] || k;
-    const hasServerData = data.hasOwnProperty(k) || data.hasOwnProperty(serverKey);
-    
-    if (hasServerData) {
-      // Server è fonte di verità: sostituisci locale con server
-      const serverItems = data[k] || data[serverKey] || [];
-      state[k] = serverItems.filter(i => i.id);
+  // Per ogni chiave dal server, SOSTITUISCI il locale
+  Object.keys(data).forEach(serverKey => {
+    const localKey = keyMap[serverKey];
+    if (localKey && Array.isArray(data[serverKey])) {
+      state[localKey] = data[serverKey].filter(i => i && i.id);
     }
-    // Se server non ha questa chiave, mantieni locale (modalità offline)
   });
 }
 
