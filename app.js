@@ -1,7 +1,7 @@
 // PERSONAL OS v5.1
 const state = {
   inbox: [], tasks: [], eventi: [], pratiche: [], progetti: [],
-  routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [],
+  routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [], note: [],
   currentSection: 'dashboard', taskFilter: 'aperti', editingId: null,
   timer: { active: false, startTime: null, desc: '', codice: '', tipo: 'task', fatturabile: true },
   agendaView: 'day', agendaDate: new Date().toISOString().split('T')[0],
@@ -23,7 +23,7 @@ function loadData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const data = JSON.parse(saved);
-      ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log'].forEach(k => {
+      ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log','note'].forEach(k => {
         if (data[k]) state[k] = data[k];
       });
     }
@@ -34,7 +34,7 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     inbox: state.inbox, tasks: state.tasks, eventi: state.eventi, pratiche: state.pratiche,
     progetti: state.progetti, routine: state.routine, routine_log: state.routine_log,
-    obiettivi: state.obiettivi, spese: state.spese, incassi: state.incassi, time_log: state.time_log
+    obiettivi: state.obiettivi, spese: state.spese, incassi: state.incassi, time_log: state.time_log, note: state.note
   }));
 }
 
@@ -100,14 +100,20 @@ function replaceLocalWithServer(data) {
     'pratiche': 'pratiche', 'progetti': 'progetti', 'routine': 'routine',
     'routineLog': 'routine_log', 'routine_log': 'routine_log',
     'obiettivi': 'obiettivi', 'spese': 'spese', 'incassi': 'incassi',
-    'timeLog': 'time_log', 'time_log': 'time_log'
+    'timeLog': 'time_log', 'time_log': 'time_log',
+    'note': 'note'
   };
   
   // Per ogni chiave dal server, SOSTITUISCI il locale
   Object.keys(data).forEach(serverKey => {
     const localKey = keyMap[serverKey];
     if (localKey && Array.isArray(data[serverKey])) {
-      state[localKey] = data[serverKey].filter(i => i && i.id);
+      if (localKey === 'note') {
+        // Le note non hanno id, prendile tutte
+        state[localKey] = data[serverKey];
+      } else {
+        state[localKey] = data[serverKey].filter(i => i && i.id);
+      }
     }
   });
 }
@@ -148,7 +154,7 @@ function showSection(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const navMap = { dashboard: 0, tasks: 1, timer: 2, finanze: 3 };
   if (navMap[name] !== undefined) document.querySelectorAll('.nav-btn')[navMap[name]].classList.add('active');
-  const titles = { dashboard: '📊 Dashboard', inbox: '📥 Inbox', tasks: '✅ Tasks', eventi: '📅 Eventi', pratiche: '📁 Pratiche', progetti: '📂 Progetti', routine: '🔄 Routine', obiettivi: '🎯 Obiettivi', timer: '⏱️ Timer', finanze: '💰 Finanze', agendaImpegni: '📋 Agenda Impegni', agendaEventi: '🗓️ Agenda Eventi' };
+  const titles = { dashboard: '📊 Dashboard', inbox: '📥 Inbox', tasks: '✅ Tasks', eventi: '📅 Eventi', pratiche: '📁 Pratiche', progetti: '📂 Progetti', routine: '🔄 Routine', obiettivi: '🎯 Obiettivi', timer: '⏱️ Timer', finanze: '💰 Finanze', agendaImpegni: '📋 Agenda Impegni', agendaEventi: '🗓️ Agenda Eventi', note: '📌 Note & Info' };
   document.getElementById('header-title').textContent = titles[name] || name;
   render();
 }
@@ -177,6 +183,7 @@ function render() {
     case 'finanze': renderFinanze(); break;
     case 'agendaImpegni': renderAgendaImpegni(); break;
     case 'agendaEventi': renderAgendaEventi(); break;
+    case 'note': renderNote(); break;
   }
 }
 
@@ -208,7 +215,48 @@ function renderDashboard() {
   else todayEvents.forEach(e => { html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${e.ora || ''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`; });
   html += '</div>';
   
+  // Widget Note & Info
+  if (state.note && state.note.length > 0) {
+    html += '<div class="dash-section"><h3>📌 Note & Info</h3>';
+    const sorted = [...state.note].sort((a,b) => (parseInt(a.ordine)||99) - (parseInt(b.ordine)||99));
+    sorted.slice(0, 5).forEach(n => {
+      const icon = n.tipo === 'tip' ? '💡' : n.tipo === 'link' ? '🔗' : n.tipo === 'warning' ? '⚠️' : 'ℹ️';
+      const contenuto = String(n.contenuto || '');
+      const isLink = contenuto.startsWith('http');
+      html += `<div class="list-item" ${isLink ? 'onclick="window.open(\''+esc(contenuto)+'\',\'_blank\')"' : 'onclick="showSection(\'note\')"'}>`;
+      html += `<span class="list-item-icon">${icon}</span><div class="list-item-content"><div class="list-item-title">${esc(n.titolo)}</div>`;
+      html += `<div class="list-item-meta">${isLink ? '🔗 Apri link' : esc(contenuto.substring(0, 80))}</div></div></div>`;
+    });
+    if (state.note.length > 5) html += `<p style="text-align:center;margin-top:8px"><a href="#" onclick="showSection('note');return false">Vedi tutte (${state.note.length})</a></p>`;
+    html += '</div>';
+  }
+  
   document.getElementById('dashboard-content').innerHTML = html;
+}
+
+// NOTE
+function renderNote() {
+  const notes = state.note || [];
+  let html = '';
+  if (notes.length === 0) {
+    html = '<p class="empty">Nessuna nota.<br>Aggiungi righe nel foglio NOTE del Google Sheet.</p>';
+  } else {
+    const sorted = [...notes].sort((a,b) => (parseInt(a.ordine)||99) - (parseInt(b.ordine)||99));
+    sorted.forEach(n => {
+      const icon = n.tipo === 'tip' ? '💡' : n.tipo === 'link' ? '🔗' : n.tipo === 'warning' ? '⚠️' : 'ℹ️';
+      const contenuto = String(n.contenuto || '');
+      const isLink = contenuto.startsWith('http');
+      html += `<div class="note-card ${n.tipo || 'info'}">`;
+      html += `<div class="note-header"><span>${icon}</span><strong>${esc(n.titolo)}</strong></div>`;
+      if (isLink) {
+        html += `<div class="note-body"><a href="${esc(contenuto)}" target="_blank">${esc(contenuto)}</a></div>`;
+      } else {
+        html += `<div class="note-body">${esc(contenuto).replace(/\n/g, '<br>')}</div>`;
+      }
+      html += '</div>';
+    });
+  }
+  document.getElementById('note-content').innerHTML = html;
 }
 
 // INBOX
@@ -232,7 +280,13 @@ function renderTasks() {
   
   items.sort((a,b) => {
     const prio = {urgente:0, alta:1, media:2, bassa:3};
-    return (prio[a.priorita]||2) - (prio[b.priorita]||2);
+    const pa = prio[(a.priorita||'').toLowerCase()] ?? 2;
+    const pb = prio[(b.priorita||'').toLowerCase()] ?? 2;
+    if (pa !== pb) return pa - pb;
+    // A parità di priorità, ordina per scadenza (prima le più vicine)
+    const da = a.scadenza || '9999-12-31';
+    const db = b.scadenza || '9999-12-31';
+    return da.localeCompare(db);
   });
   
   let html = '';
