@@ -138,6 +138,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 .quarter-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .quarter-day { aspect-ratio: 1; font-size: 9px; text-align: center; background: var(--bg); border-radius: 3px; display: flex; align-items: center; justify-content: center; }
 .quarter-day.has-items { background: var(--primary); color: white; }
+.note-card { background: var(--card); border-radius: 10px; padding: 14px; margin-bottom: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); border-left: 4px solid var(--primary); }
+.note-card.tip { border-left-color: var(--warning); }
+.note-card.link { border-left-color: var(--success); }
+.note-card.warning { border-left-color: var(--danger); }
+.note-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.note-body { font-size: 14px; color: var(--text); line-height: 1.5; }
+.note-body a { color: var(--primary); word-break: break-all; }
 </style>
 </head>
 <body>
@@ -159,6 +166,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
     <div class="drawer-item" onclick="showSection('obiettivi');toggleDrawer()">🎯 Obiettivi</div>
     <div class="drawer-item" onclick="showSection('timer');toggleDrawer()">⏱️ Timer</div>
     <div class="drawer-item" onclick="showSection('finanze');toggleDrawer()">💰 Finanze</div>
+    <div class="drawer-item" onclick="showSection('note');toggleDrawer()">📌 Note & Info</div>
+    <div class="drawer-item" onclick="showSection('diario');toggleDrawer()">📔 Diario</div>
     <hr style="margin:12px 0">
     <div class="drawer-item" onclick="showSection('agendaImpegni');toggleDrawer()">📋 Agenda Impegni</div>
     <div class="drawer-item" onclick="showSection('agendaEventi');toggleDrawer()">🗓️ Agenda Eventi</div>
@@ -197,6 +206,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <section class="section" id="section-finanze"><div id="finanze-content"></div><div style="position:fixed;bottom:80px;right:16px;display:flex;flex-direction:column;gap:8px"><button class="btn btn-danger" onclick="openNewSpesa()" style="border-radius:50%;width:48px;height:48px">💸</button><button class="btn btn-success" onclick="openNewIncasso()" style="border-radius:50%;width:48px;height:48px">💰</button></div></section>
 <section class="section" id="section-agendaImpegni"><div id="agenda-impegni-content"></div></section>
 <section class="section" id="section-agendaEventi"><div id="agenda-eventi-content"></div></section>
+<section class="section" id="section-note"><div id="note-content"></div></section>
+<section class="section" id="section-diario"><div id="diario-content"></div></section>
 <nav class="nav">
   <button class="nav-btn active" onclick="showSection('dashboard')"><span>📊</span>Home</button>
   <button class="nav-btn" onclick="showSection('tasks')"><span>✅</span>Tasks</button>
@@ -214,6 +225,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-
 <div class="modal" id="modal-stop-timer"><div class="modal-content"><div class="modal-header"><h3>⏱️ Salva Tempo</h3><button class="modal-close" onclick="closeModal('modal-stop-timer')">×</button></div><p style="margin-bottom:12px"><strong id="stop-timer-desc"></strong></p><p style="margin-bottom:16px;font-size:24px" id="stop-timer-time"></p><div class="form-group"><label>Note</label><textarea id="stop-timer-note" rows="2"></textarea></div><div class="form-actions"><button class="btn btn-danger" onclick="discardTimer()">Scarta</button><button class="btn btn-success" onclick="saveTimerLog()">Salva</button></div></div></div>
 <div class="modal" id="modal-spesa"><div class="modal-content"><div class="modal-header"><h3>💸 Spesa</h3><button class="modal-close" onclick="closeModal('modal-spesa')">×</button></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="spesa-data"></div><div class="form-group"><label>Importo €</label><input type="number" id="spesa-importo" step="0.01"></div></div><div class="form-group"><label>Categoria</label><input type="text" id="spesa-categoria"></div><div class="form-group"><label>Descrizione</label><input type="text" id="spesa-descrizione"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-spesa" onclick="deleteSpesa()">Elimina</button><button class="btn btn-primary" onclick="saveSpesa()">Salva</button></div></div></div>
 <div class="modal" id="modal-incasso"><div class="modal-content"><div class="modal-header"><h3>💰 Incasso</h3><button class="modal-close" onclick="closeModal('modal-incasso')">×</button></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="incasso-data"></div><div class="form-group"><label>Importo €</label><input type="number" id="incasso-importo" step="0.01"></div></div><div class="form-group"><label>Tipo</label><select id="incasso-tipo"><option value="fattura">Fattura</option><option value="acconto">Acconto</option><option value="altro">Altro</option></select></div><div class="form-group"><label>Descrizione</label><input type="text" id="incasso-descrizione"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-incasso" onclick="deleteIncasso()">Elimina</button><button class="btn btn-primary" onclick="saveIncasso()">Salva</button></div></div></div>
+<div class="modal" id="modal-diario"><div class="modal-content"><div class="modal-header"><h3>📔 Diario</h3><button class="modal-close" onclick="closeModal('modal-diario')">×</button></div><div class="form-row"><div class="form-group"><label>Data</label><input type="date" id="diario-data"></div><div class="form-group"><label>Ora</label><input type="time" id="diario-ora"></div></div><div class="form-row"><div class="form-group"><label>Tipo</label><select id="diario-tipo"><option value="nota">📝 Nota</option><option value="task">✅ Task completato</option><option value="tempo">⏱️ Tempo registrato</option><option value="evento">📅 Evento</option></select></div><div class="form-group"><label>Durata (min)</label><input type="number" id="diario-durata" min="0"></div></div><div class="form-group"><label>Titolo</label><input type="text" id="diario-titolo"></div><div class="form-group"><label>Descrizione</label><textarea id="diario-descrizione" rows="3"></textarea></div><div class="form-group"><label>Codice</label><input type="text" id="diario-codice"></div><div class="form-actions"><button class="btn btn-danger" id="btn-del-diario" onclick="deleteDiario()">Elimina</button><button class="btn btn-primary" onclick="saveDiario()">Salva</button></div></div></div>
 <div class="modal" id="modal-settings"><div class="modal-content"><div class="modal-header"><h3>⚙️ Impostazioni</h3><button class="modal-close" onclick="closeModal('modal-settings')">×</button></div><div class="form-group"><label>URL API (Google Script)</label><input type="url" id="input-api-url" placeholder="https://script.google.com/..."></div><div class="form-group"><button class="btn btn-primary" onclick="testConnection()">Test Connessione</button><span id="connection-result" style="margin-left:12px"></span></div><hr style="margin:16px 0"><div class="form-group"><button class="btn btn-success" style="width:100%" onclick="manualSync()">🔄 Sincronizza Ora</button></div></div></div>
 <div class="toast" id="toast"></div>
 <div class="sync-popup" id="sync-popup">🔄 Sincronizzazione...</div>
