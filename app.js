@@ -1,7 +1,7 @@
-// PERSONAL OS v5.1
+// PERSONAL OS v5.3 - note + diario
 const state = {
   inbox: [], tasks: [], eventi: [], pratiche: [], progetti: [],
-  routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [], note: [],
+  routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [], note: [], diario: [],
   currentSection: 'dashboard', taskFilter: 'aperti', editingId: null,
   timer: { active: false, startTime: null, desc: '', codice: '', tipo: 'task', fatturabile: true },
   agendaView: 'day', agendaDate: new Date().toISOString().split('T')[0],
@@ -13,6 +13,7 @@ const API_KEY = 'personalOS_v5_api';
 const TIMER_KEY = 'personalOS_v5_timer';
 
 document.addEventListener('DOMContentLoaded', function() {
+  console.log('PersonalOS v5.3 - note + diario');
   loadData(); loadTimer(); render(); updateStats();
   setInterval(updateTimerDisplay, 1000);
   autoSync();
@@ -23,7 +24,7 @@ function loadData() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       const data = JSON.parse(saved);
-      ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log','note'].forEach(k => {
+      ['inbox','tasks','eventi','pratiche','progetti','routine','routine_log','obiettivi','spese','incassi','time_log','note','diario'].forEach(k => {
         if (data[k]) state[k] = data[k];
       });
     }
@@ -34,7 +35,7 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     inbox: state.inbox, tasks: state.tasks, eventi: state.eventi, pratiche: state.pratiche,
     progetti: state.progetti, routine: state.routine, routine_log: state.routine_log,
-    obiettivi: state.obiettivi, spese: state.spese, incassi: state.incassi, time_log: state.time_log, note: state.note
+    obiettivi: state.obiettivi, spese: state.spese, incassi: state.incassi, time_log: state.time_log, note: state.note, diario: state.diario
   }));
 }
 
@@ -101,7 +102,7 @@ function replaceLocalWithServer(data) {
     'routineLog': 'routine_log', 'routine_log': 'routine_log',
     'obiettivi': 'obiettivi', 'spese': 'spese', 'incassi': 'incassi',
     'timeLog': 'time_log', 'time_log': 'time_log',
-    'note': 'note'
+    'note': 'note', 'diario': 'diario'
   };
   
   // Per ogni chiave dal server, SOSTITUISCI il locale
@@ -121,14 +122,14 @@ function replaceLocalWithServer(data) {
 async function syncItem(collection, item) {
   const url = getApiUrl();
   if (!url) return;
-  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG' };
+  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG', diario:'DIARIO' };
   try { await fetch(`${url}?action=save&sheet=${sheetMap[collection]}&data=${encodeURIComponent(JSON.stringify(item))}`); } catch(e) {}
 }
 
 async function syncDelete(collection, id) {
   const url = getApiUrl();
   if (!url) return;
-  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG' };
+  const sheetMap = { inbox:'INBOX', tasks:'TASKS', eventi:'EVENTI', pratiche:'PRATICHE', progetti:'PROGETTI', routine:'ROUTINE', routine_log:'ROUTINE_LOG', obiettivi:'OBIETTIVI', spese:'SPESE', incassi:'INCASSI', time_log:'TIME_LOG', diario:'DIARIO' };
   try { await fetch(`${url}?action=delete&sheet=${sheetMap[collection]}&id=${id}`); } catch(e) {}
 }
 
@@ -154,7 +155,7 @@ function showSection(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   const navMap = { dashboard: 0, tasks: 1, timer: 2, finanze: 3 };
   if (navMap[name] !== undefined) document.querySelectorAll('.nav-btn')[navMap[name]].classList.add('active');
-  const titles = { dashboard: '📊 Dashboard', inbox: '📥 Inbox', tasks: '✅ Tasks', eventi: '📅 Eventi', pratiche: '📁 Pratiche', progetti: '📂 Progetti', routine: '🔄 Routine', obiettivi: '🎯 Obiettivi', timer: '⏱️ Timer', finanze: '💰 Finanze', agendaImpegni: '📋 Agenda Impegni', agendaEventi: '🗓️ Agenda Eventi', note: '📌 Note & Info' };
+  const titles = { dashboard: '📊 Dashboard', inbox: '📥 Inbox', tasks: '✅ Tasks', eventi: '📅 Eventi', pratiche: '📁 Pratiche', progetti: '📂 Progetti', routine: '🔄 Routine', obiettivi: '🎯 Obiettivi', timer: '⏱️ Timer', finanze: '💰 Finanze', agendaImpegni: '📋 Agenda Impegni', agendaEventi: '🗓️ Agenda Eventi', note: '📌 Note & Info', diario: '📔 Diario' };
   document.getElementById('header-title').textContent = titles[name] || name;
   render();
 }
@@ -184,6 +185,7 @@ function render() {
     case 'agendaImpegni': renderAgendaImpegni(); break;
     case 'agendaEventi': renderAgendaEventi(); break;
     case 'note': renderNote(); break;
+    case 'diario': renderDiario(); break;
   }
 }
 
@@ -257,6 +259,200 @@ function renderNote() {
     });
   }
   document.getElementById('note-content').innerHTML = html;
+}
+
+// DIARIO
+let diarioView = 'day';
+let diarioDate = getToday();
+
+function renderDiario() {
+  let html = '<div class="agenda-controls">';
+  html += '<div class="agenda-nav"><button onclick="diarioNav(-1)">◀</button>';
+  html += `<input type="date" value="${diarioDate}" onchange="diarioDateChange(this.value)">`;
+  html += '<button onclick="diarioNav(1)">▶</button></div>';
+  html += '<div class="agenda-views">';
+  html += `<button class="${diarioView==='day'?'active':''}" onclick="setDiarioView('day')">Giorno</button>`;
+  html += `<button class="${diarioView==='week'?'active':''}" onclick="setDiarioView('week')">Settimana</button>`;
+  html += `<button class="${diarioView==='month'?'active':''}" onclick="setDiarioView('month')">Mese</button>`;
+  html += `<button class="${diarioView==='quarter'?'active':''}" onclick="setDiarioView('quarter')">Trimestre</button>`;
+  html += '</div></div>';
+  html += '<div style="text-align:right;margin-bottom:10px"><button class="btn btn-primary" onclick="openNewDiario()">+ Aggiungi nota</button></div>';
+  html += '<div id="diario-view-content"></div>';
+  document.getElementById('diario-content').innerHTML = html;
+  
+  if (diarioView === 'day') renderDiarioDayView(diarioDate);
+  else if (diarioView === 'week') renderDiarioWeekView(diarioDate);
+  else if (diarioView === 'month') renderDiarioMonthView(diarioDate);
+  else if (diarioView === 'quarter') renderDiarioQuarterView(diarioDate);
+}
+
+function setDiarioView(v) { diarioView = v; renderDiario(); }
+function diarioNav(dir) {
+  const d = new Date(diarioDate);
+  if (diarioView === 'day') d.setDate(d.getDate() + dir);
+  else if (diarioView === 'week') d.setDate(d.getDate() + dir * 7);
+  else if (diarioView === 'month') d.setMonth(d.getMonth() + dir);
+  else if (diarioView === 'quarter') d.setMonth(d.getMonth() + dir * 3);
+  diarioDate = formatDateISO(d);
+  renderDiario();
+}
+function diarioDateChange(v) { diarioDate = v; renderDiario(); }
+
+function renderDiarioDayView(dateStr) {
+  const items = (state.diario || []).filter(d => d.data === dateStr);
+  items.sort((a,b) => (a.ora||'00:00').localeCompare(b.ora||'00:00'));
+  let html = `<h3 style="margin-bottom:15px">${formatDate(dateStr)}</h3>`;
+  if (items.length === 0) {
+    html += '<p class="empty">Nessuna registrazione per questa data</p>';
+  } else {
+    items.forEach(d => {
+      const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
+      html += `<div class="list-item" onclick="openDiario('${d.id}')">`;
+      html += `<span class="list-item-icon">${icon}</span>`;
+      html += `<div class="list-item-content"><div class="list-item-title">${esc(d.titolo)}</div>`;
+      html += `<div class="list-item-meta">${d.ora||''} ${d.durata ? '⏱️'+d.durata+'min' : ''} ${d.codice ? '🏷️'+d.codice : ''}</div>`;
+      if (d.descrizione) html += `<div class="list-item-meta">${esc(d.descrizione)}</div>`;
+      html += '</div></div>';
+    });
+  }
+  document.getElementById('diario-view-content').innerHTML = html;
+}
+
+function renderDiarioWeekView(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  let html = '<div class="week-grid">';
+  for (let i = 0; i < 7; i++) {
+    const curr = new Date(monday);
+    curr.setDate(monday.getDate() + i);
+    const ds = formatDateISO(curr);
+    const items = (state.diario || []).filter(x => x.data === ds);
+    const isToday = ds === getToday();
+    html += `<div class="week-day ${isToday ? 'today' : ''}" onclick="diarioDate='${ds}';setDiarioView('day')">`;
+    html += `<div class="week-day-header">${['Lun','Mar','Mer','Gio','Ven','Sab','Dom'][i]} ${curr.getDate()}</div>`;
+    html += `<div class="week-day-count">${items.length} ${items.length===1?'voce':'voci'}</div>`;
+    const mins = items.reduce((s,x) => s + (parseInt(x.durata)||0), 0);
+    if (mins > 0) html += `<div class="week-day-meta">⏱️ ${mins} min</div>`;
+    html += '</div>';
+  }
+  html += '</div>';
+  document.getElementById('diario-view-content').innerHTML = html;
+}
+
+function renderDiarioMonthView(dateStr) {
+  const d = new Date(dateStr);
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startPad = (firstDay.getDay() + 6) % 7;
+  let html = `<h3 style="margin-bottom:15px">${['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'][month]} ${year}</h3>`;
+  html += '<div class="month-grid"><div class="month-header">L</div><div class="month-header">M</div><div class="month-header">M</div><div class="month-header">G</div><div class="month-header">V</div><div class="month-header">S</div><div class="month-header">D</div>';
+  for (let i = 0; i < startPad; i++) html += '<div class="month-day empty"></div>';
+  for (let day = 1; day <= lastDay.getDate(); day++) {
+    const ds = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const items = (state.diario || []).filter(x => x.data === ds);
+    const isToday = ds === getToday();
+    html += `<div class="month-day ${isToday ? 'today' : ''} ${items.length ? 'has-items' : ''}" onclick="diarioDate='${ds}';setDiarioView('day')">${day}${items.length ? '<span class="dot"></span>' : ''}</div>`;
+  }
+  html += '</div>';
+  document.getElementById('diario-view-content').innerHTML = html;
+}
+
+function renderDiarioQuarterView(dateStr) {
+  const d = new Date(dateStr);
+  const year = d.getFullYear();
+  const quarter = Math.floor(d.getMonth() / 3);
+  const months = [quarter * 3, quarter * 3 + 1, quarter * 3 + 2];
+  const monthNames = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  let html = `<h3 style="margin-bottom:15px">Q${quarter+1} ${year}</h3><div class="quarter-grid">`;
+  months.forEach(m => {
+    html += `<div class="quarter-month"><h4>${monthNames[m]}</h4><div class="quarter-days">`;
+    const lastDay = new Date(year, m + 1, 0).getDate();
+    for (let day = 1; day <= lastDay; day++) {
+      const ds = `${year}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      const items = (state.diario || []).filter(x => x.data === ds);
+      html += `<div class="quarter-day ${items.length ? 'has-items' : ''}" onclick="diarioDate='${ds}';setDiarioView('day')">${day}</div>`;
+    }
+    html += '</div></div>';
+  });
+  html += '</div>';
+  document.getElementById('diario-view-content').innerHTML = html;
+}
+
+function openNewDiario() {
+  state.editingId = null;
+  document.getElementById('diario-data').value = diarioDate;
+  document.getElementById('diario-ora').value = '';
+  document.getElementById('diario-tipo').value = 'nota';
+  document.getElementById('diario-titolo').value = '';
+  document.getElementById('diario-descrizione').value = '';
+  document.getElementById('diario-durata').value = '';
+  document.getElementById('diario-codice').value = '';
+  document.getElementById('btn-del-diario').style.display = 'none';
+  document.getElementById('modal-diario').classList.add('open');
+}
+
+function openDiario(id) {
+  const d = state.diario.find(x => x.id === id);
+  if (!d) return;
+  state.editingId = id;
+  document.getElementById('diario-data').value = d.data || '';
+  document.getElementById('diario-ora').value = d.ora || '';
+  document.getElementById('diario-tipo').value = d.tipo || 'nota';
+  document.getElementById('diario-titolo').value = d.titolo || '';
+  document.getElementById('diario-descrizione').value = d.descrizione || '';
+  document.getElementById('diario-durata').value = d.durata || '';
+  document.getElementById('diario-codice').value = d.codice || '';
+  document.getElementById('btn-del-diario').style.display = '';
+  document.getElementById('modal-diario').classList.add('open');
+}
+
+function saveDiario() {
+  const item = {
+    id: state.editingId || genId(),
+    data: document.getElementById('diario-data').value,
+    ora: document.getElementById('diario-ora').value,
+    tipo: document.getElementById('diario-tipo').value,
+    titolo: document.getElementById('diario-titolo').value,
+    descrizione: document.getElementById('diario-descrizione').value,
+    durata: document.getElementById('diario-durata').value,
+    codice: document.getElementById('diario-codice').value,
+    timestamp: new Date().toISOString()
+  };
+  if (state.editingId) {
+    const idx = state.diario.findIndex(x => x.id === state.editingId);
+    if (idx >= 0) state.diario[idx] = item;
+  } else {
+    state.diario.push(item);
+  }
+  closeModal('modal-diario'); saveData(); syncItem('diario', item); render(); toast('Salvato');
+}
+
+function deleteDiario() {
+  if (!state.editingId || !confirm('Eliminare?')) return;
+  const id = state.editingId;
+  state.diario = state.diario.filter(x => x.id !== id);
+  closeModal('modal-diario'); saveData(); syncDelete('diario', id); render(); toast('Eliminato');
+}
+
+function addToDiario(tipo, titolo, descrizione, durata, codice) {
+  const item = {
+    id: genId(),
+    data: getToday(),
+    ora: new Date().toTimeString().slice(0,5),
+    tipo: tipo,
+    titolo: titolo,
+    descrizione: descrizione || '',
+    durata: durata || '',
+    codice: codice || '',
+    timestamp: new Date().toISOString()
+  };
+  state.diario.push(item);
+  saveData();
+  syncItem('diario', item);
 }
 
 // INBOX
@@ -790,6 +986,8 @@ function openTask(id) {
 function saveTask() {
   const titolo = document.getElementById('task-titolo').value.trim();
   if (!titolo) { toast('Inserisci titolo'); return; }
+  const oldTask = state.editingId ? state.tasks.find(x => x.id === state.editingId) : null;
+  const wasCompleted = oldTask ? oldTask.stato === 'completato' : false;
   const item = { 
     id: state.editingId || genId(), 
     titolo, 
@@ -801,6 +999,10 @@ function saveTask() {
     codice: document.getElementById('task-codice').value, 
     creato: new Date().toISOString() 
   };
+  // Registra nel diario se appena completato
+  if (item.stato === 'completato' && !wasCompleted) {
+    addToDiario('task', '✅ ' + titolo, item.descrizione, item.durata, item.codice);
+  }
   if (state.editingId) { const i = state.tasks.findIndex(x => x.id === state.editingId); if (i >= 0) state.tasks[i] = item; }
   else state.tasks.push(item);
   closeModal('modal-task'); saveData(); syncItem('tasks', item); render(); updateStats(); toast('Salvato!');
@@ -1064,6 +1266,8 @@ function saveTimerLog() {
   const mins = Math.max(1, Math.round(secs / 60));
   const item = { id: genId(), data: getToday(), descrizione: state.timer.desc, codice: state.timer.codice, tipo: state.timer.tipo, minuti: mins, fatturabile: state.timer.fatturabile, note: document.getElementById('stop-timer-note').value, timestamp: new Date().toISOString() };
   state.time_log.push(item);
+  // Registra nel diario
+  addToDiario('tempo', '⏱️ ' + state.timer.desc, item.note, mins, item.codice);
   resetTimer();
   closeModal('modal-stop-timer');
   saveData(); syncItem('time_log', item); render(); updateStats(); toast('Tempo salvato!');
@@ -1177,4 +1381,4 @@ function toast(msg) { const t = document.getElementById('toast'); t.textContent 
 function showSyncPopup() { document.getElementById('sync-popup').classList.add('show'); }
 function hideSyncPopup() { document.getElementById('sync-popup').classList.remove('show'); }
 
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(e => {}); }
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(e => {}); 
