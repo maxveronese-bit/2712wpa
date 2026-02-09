@@ -1381,4 +1381,4 @@ function toast(msg) { const t = document.getElementById('toast'); t.textContent 
 function showSyncPopup() { document.getElementById('sync-popup').classList.add('show'); }
 function hideSyncPopup() { document.getElementById('sync-popup').classList.remove('show'); }
 
-if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(e => {}); 
+if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js').catch(e => {}); }
