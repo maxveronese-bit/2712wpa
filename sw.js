@@ -1,4 +1,4 @@
-const CACHE_NAME = 'personalos-v5.4';
+const CACHE_NAME = 'personalos-v5.6';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
