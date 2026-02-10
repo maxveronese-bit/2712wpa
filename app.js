@@ -341,7 +341,8 @@ function renderDiarioDayView(dateStr) {
     hourItems.forEach(d => {
       const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
       const dur = parseInt(d.durata) || 30;
-      html += `<div class="agenda-item diario" style="height:${Math.max(24, dur/2)}px" onclick="openDiario('${d.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(d.titolo)}</span><span class="item-meta">${d.ora||''} ${d.durata ? d.durata+'min' : ''}</span></div>`;
+      const timeRange = formatTimeRange(d.ora, dur);
+      html += `<div class="agenda-item diario" style="height:${Math.max(24, dur/2)}px" onclick="openDiario('${d.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(d.titolo)}</span><span class="item-meta">${timeRange} ${d.durata ? '('+d.durata+'min)' : ''}</span></div>`;
     });
     html += '</div></div>';
   }
@@ -795,7 +796,8 @@ function renderAgendaDayView(dateStr, tipo) {
       html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content">`;
       hourItems.forEach(e => {
         const dur = parseInt(e.durata) || 60;
-        html += `<div class="agenda-item evento" style="height:${Math.max(24, dur/2)}px" onclick="openEvento('${e.id}')"><span class="item-title">${esc(e.titolo)}</span><span class="item-meta">${e.ora||''} ${dur}min</span></div>`;
+        const timeRange = formatTimeRange(e.ora, dur);
+        html += `<div class="agenda-item evento" style="height:${Math.max(24, dur/2)}px" onclick="openEvento('${e.id}')"><span class="item-title">${esc(e.titolo)}</span><span class="item-meta">${timeRange} (${dur}min)</span></div>`;
       });
       html += '</div></div>';
     }
@@ -1419,6 +1421,19 @@ function deleteIncasso() {
 
 // UTILITIES
 function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2,9); }
+function calcEndTime(startTime, durationMin) {
+  if (!startTime || !durationMin) return '';
+  const [h, m] = startTime.split(':').map(Number);
+  const totalMin = h * 60 + m + parseInt(durationMin);
+  const endH = Math.floor(totalMin / 60) % 24;
+  const endM = totalMin % 60;
+  return `${endH.toString().padStart(2,'0')}:${endM.toString().padStart(2,'0')}`;
+}
+function formatTimeRange(startTime, durationMin) {
+  if (!startTime) return '';
+  const endTime = calcEndTime(startTime, durationMin);
+  return endTime ? `${startTime} - ${endTime}` : startTime;
+}
 function getToday() { return new Date().toISOString().split('T')[0]; }
 function pad(n) { return n.toString().padStart(2, '0'); }
 function parseDate(val) { if (!val) return null; return new Date(val); }
