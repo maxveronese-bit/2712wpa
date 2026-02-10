@@ -1068,7 +1068,6 @@ function openNewEvento() {
   document.getElementById('evento-titolo').value = '';
   document.getElementById('evento-data').value = getToday();
   document.getElementById('evento-ora').value = '';
-  document.getElementById('evento-ora-fine').value = '';
   document.getElementById('evento-durata').value = '';
   document.getElementById('evento-luogo').value = '';
   document.getElementById('evento-note').value = '';
@@ -1083,7 +1082,6 @@ function openEvento(id) {
   document.getElementById('evento-titolo').value = e.titolo || '';
   document.getElementById('evento-data').value = e.data ? formatDateISO(parseDate(e.data)) : '';
   document.getElementById('evento-ora').value = e.ora || '';
-  document.getElementById('evento-ora-fine').value = e.ora_fine || '';
   document.getElementById('evento-durata').value = e.durata || '';
   document.getElementById('evento-luogo').value = e.luogo || '';
   document.getElementById('evento-note').value = e.note || '';
@@ -1100,7 +1098,6 @@ function saveEvento() {
     titolo, 
     data, 
     ora: document.getElementById('evento-ora').value, 
-    ora_fine: document.getElementById('evento-ora-fine').value,
     durata: document.getElementById('evento-durata').value,
     luogo: document.getElementById('evento-luogo').value, 
     note: document.getElementById('evento-note').value, 
