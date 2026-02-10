@@ -1,4 +1,4 @@
-// PERSONAL OS v5.3 - note + diario
+// PERSONAL OS v5.3 - note + diario + categorie
 const state = {
   inbox: [], tasks: [], eventi: [], pratiche: [], progetti: [],
   routine: [], routine_log: [], obiettivi: [], spese: [], incassi: [], time_log: [], note: [], diario: [],
@@ -13,7 +13,7 @@ const API_KEY = 'personalOS_v5_api';
 const TIMER_KEY = 'personalOS_v5_timer';
 
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('PersonalOS v5.3 - note + diario');
+  console.log('PersonalOS v5.3 - note + diario + categorie');
   loadData(); loadTimer(); render(); updateStats();
   setInterval(updateTimerDisplay, 1000);
   autoSync();
@@ -551,11 +551,25 @@ function renderFinanze() {
   
   let html = `<div class="finanze-summary"><div class="fin-card fin-spese"><span class="fin-label">Spese</span><span class="fin-value">€${totSpese.toFixed(2)}</span></div><div class="fin-card fin-incassi"><span class="fin-label">Incassi</span><span class="fin-value">€${totIncassi.toFixed(2)}</span></div><div class="fin-card fin-saldo"><span class="fin-label">Saldo</span><span class="fin-value">€${(totIncassi-totSpese).toFixed(2)}</span></div></div>`;
   
+  const categorieSpese = {
+    'spese_ufficio': 'Spese ufficio',
+    'spese_auto': 'Spese auto e motoveicoli',
+    'imposte': 'Pagamento imposte',
+    'gioco': 'Gioco e azzardi',
+    'cibo': 'Cibo e bevande',
+    'pagamenti_ai': 'Pagamenti AI',
+    'pagamenti_digitali': 'Altri pagamenti digitali',
+    'fitness': 'Fitness e cura personale',
+    'farmaci': 'Farmaci',
+    'affitti_mutui': 'Affitti e mutui extra ufficio',
+    'altro': 'Altro'
+  };
   const all = [...spese.map(x=>({...x,_t:'spesa'})), ...incassi.map(x=>({...x,_t:'incasso'}))].sort((a,b) => new Date(b.data) - new Date(a.data));
   
   html += '<div class="finanze-list">';
   all.forEach(x => {
-    html += `<div class="list-item" onclick="open${x._t==='spesa'?'Spesa':'Incasso'}('${x.id}')"><span class="list-item-icon">${x._t==='spesa'?'💸':'💰'}</span><div class="list-item-content"><div class="list-item-title">${esc(x.descrizione||x.categoria||x.tipo||'-')}</div><div class="list-item-meta">${formatDate(x.data)}</div></div><span class="list-item-value ${x._t==='spesa'?'text-danger':'text-success'}">€${parseFloat(x.importo).toFixed(2)}</span></div>`;
+    const label = x._t === 'spesa' ? (x.descrizione || categorieSpese[x.categoria] || x.categoria || '-') : (x.descrizione || x.tipo || '-');
+    html += `<div class="list-item" onclick="open${x._t==='spesa'?'Spesa':'Incasso'}('${x.id}')"><span class="list-item-icon">${x._t==='spesa'?'💸':'💰'}</span><div class="list-item-content"><div class="list-item-title">${esc(label)}</div><div class="list-item-meta">${formatDate(x.data)} ${x._t==='spesa' && x.categoria ? '| '+categorieSpese[x.categoria] : ''}</div></div><span class="list-item-value ${x._t==='spesa'?'text-danger':'text-success'}">€${parseFloat(x.importo).toFixed(2)}</span></div>`;
   });
   html += '</div>';
   document.getElementById('finanze-content').innerHTML = html;
@@ -1294,7 +1308,7 @@ function openNewSpesa() {
   state.editingId = null;
   document.getElementById('spesa-data').value = getToday();
   document.getElementById('spesa-importo').value = '';
-  document.getElementById('spesa-categoria').value = '';
+  document.getElementById('spesa-categoria').value = 'spese_ufficio';
   document.getElementById('spesa-descrizione').value = '';
   document.getElementById('btn-del-spesa').style.display = 'none';
   openModal('modal-spesa');
@@ -1306,7 +1320,7 @@ function openSpesa(id) {
   state.editingId = id;
   document.getElementById('spesa-data').value = formatDateISO(parseDate(s.data));
   document.getElementById('spesa-importo').value = s.importo || '';
-  document.getElementById('spesa-categoria').value = s.categoria || '';
+  document.getElementById('spesa-categoria').value = s.categoria || 'altro';
   document.getElementById('spesa-descrizione').value = s.descrizione || '';
   document.getElementById('btn-del-spesa').style.display = 'inline-block';
   openModal('modal-spesa');
