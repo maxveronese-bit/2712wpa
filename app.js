@@ -13,10 +13,28 @@ const API_KEY = 'personalOS_v5_api';
 const TIMER_KEY = 'personalOS_v5_timer';
 
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('PersonalOS v5.3 - note + diario + categorie');
-  loadData(); loadTimer(); render(); updateStats();
+  console.log('PersonalOS v5.3 - note + diario + categorie + deeplink');
+  loadData(); loadTimer();
+  // Carica sezione da URL hash se presente
+  const hash = location.hash.replace('#', '');
+  const validSections = ['dashboard','inbox','tasks','eventi','pratiche','progetti','routine','obiettivi','timer','finanze','agendaImpegni','agendaEventi','note','diario'];
+  if (hash && validSections.includes(hash)) {
+    showSection(hash);
+  } else {
+    render();
+  }
+  updateStats();
   setInterval(updateTimerDisplay, 1000);
   autoSync();
+});
+
+// Gestisce navigazione avanti/indietro del browser
+window.addEventListener('hashchange', function() {
+  const hash = location.hash.replace('#', '');
+  const validSections = ['dashboard','inbox','tasks','eventi','pratiche','progetti','routine','obiettivi','timer','finanze','agendaImpegni','agendaEventi','note','diario'];
+  if (hash && validSections.includes(hash)) {
+    showSection(hash);
+  }
 });
 
 function loadData() {
@@ -150,6 +168,12 @@ async function testConnection() {
 
 function showSection(name) {
   state.currentSection = name;
+  // Aggiorna URL hash per link diretti
+  if (history.replaceState) {
+    history.replaceState(null, null, '#' + name);
+  } else {
+    location.hash = name;
+  }
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.getElementById('section-' + name).classList.add('active');
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
