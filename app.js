@@ -238,7 +238,7 @@ function renderDashboard() {
   
   html += '<div class="dash-section"><h3>📅 Eventi di oggi</h3>';
   if (todayEvents.length === 0) html += '<p class="empty">Nessun evento per oggi</p>';
-  else todayEvents.forEach(e => { html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${e.ora || ''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`; });
+  else todayEvents.forEach(e => { html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${e.ora || ''}${e.ora_fine ? '-'+e.ora_fine : ''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`; });
   html += '</div>';
   
   // Widget Note & Info
@@ -324,21 +324,28 @@ function diarioDateChange(v) { diarioDate = v; renderDiario(); }
 
 function renderDiarioDayView(dateStr) {
   const items = (state.diario || []).filter(d => d.data === dateStr);
-  items.sort((a,b) => (a.ora||'00:00').localeCompare(b.ora||'00:00'));
-  let html = `<h3 style="margin-bottom:15px">${formatDate(dateStr)}</h3>`;
-  if (items.length === 0) {
-    html += '<p class="empty">Nessuna registrazione per questa data</p>';
-  } else {
-    items.forEach(d => {
-      const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
-      html += `<div class="list-item" onclick="openDiario('${d.id}')">`;
-      html += `<span class="list-item-icon">${icon}</span>`;
-      html += `<div class="list-item-content"><div class="list-item-title">${esc(d.titolo)}</div>`;
-      html += `<div class="list-item-meta">${d.ora||''} ${d.durata ? '⏱️'+d.durata+'min' : ''} ${d.codice ? '🏷️'+d.codice : ''}</div>`;
-      if (d.descrizione) html += `<div class="list-item-meta">${esc(d.descrizione)}</div>`;
-      html += '</div></div>';
+  const date = new Date(dateStr);
+  const dayName = date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  
+  let html = `<h3>${dayName}</h3>`;
+  html += '<div class="day-view">';
+  
+  // Griglia oraria 07:00 - 21:00
+  for (let h = 7; h <= 21; h++) {
+    const hourItems = items.filter(d => {
+      if (!d.ora) return h === 7; // Senza ora, metti alle 7
+      const [hh] = d.ora.split(':').map(Number);
+      return hh === h;
     });
+    html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content">`;
+    hourItems.forEach(d => {
+      const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
+      const dur = parseInt(d.durata) || 30;
+      html += `<div class="agenda-item diario" style="height:${Math.max(24, dur/2)}px" onclick="openDiario('${d.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(d.titolo)}</span><span class="item-meta">${d.ora||''} ${d.durata ? d.durata+'min' : ''}</span></div>`;
+    });
+    html += '</div></div>';
   }
+  html += '</div>';
   document.getElementById('diario-view-content').innerHTML = html;
 }
 
@@ -531,7 +538,7 @@ function renderEventi() {
   let html = '';
   if (items.length === 0) html = '<p class="empty">Nessun evento</p>';
   else items.forEach(e => {
-    html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${formatDate(e.data)} ${e.ora||''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`;
+    html += `<div class="list-item" onclick="openEvento('${e.id}')"><span class="list-item-icon">📅</span><div class="list-item-content"><div class="list-item-title">${esc(e.titolo)}</div><div class="list-item-meta">${formatDate(e.data)} ${e.ora||''}${e.ora_fine ? '-'+e.ora_fine : ''} ${e.luogo ? '📍'+e.luogo : ''} ${e.durata ? '⏱️'+e.durata+'min' : ''}</div></div></div>`;
   });
   document.getElementById('eventi-list').innerHTML = html;
 }
@@ -1059,6 +1066,7 @@ function openNewEvento() {
   document.getElementById('evento-titolo').value = '';
   document.getElementById('evento-data').value = getToday();
   document.getElementById('evento-ora').value = '';
+  document.getElementById('evento-ora-fine').value = '';
   document.getElementById('evento-durata').value = '';
   document.getElementById('evento-luogo').value = '';
   document.getElementById('evento-note').value = '';
@@ -1073,6 +1081,7 @@ function openEvento(id) {
   document.getElementById('evento-titolo').value = e.titolo || '';
   document.getElementById('evento-data').value = e.data ? formatDateISO(parseDate(e.data)) : '';
   document.getElementById('evento-ora').value = e.ora || '';
+  document.getElementById('evento-ora-fine').value = e.ora_fine || '';
   document.getElementById('evento-durata').value = e.durata || '';
   document.getElementById('evento-luogo').value = e.luogo || '';
   document.getElementById('evento-note').value = e.note || '';
@@ -1089,6 +1098,7 @@ function saveEvento() {
     titolo, 
     data, 
     ora: document.getElementById('evento-ora').value, 
+    ora_fine: document.getElementById('evento-ora-fine').value,
     durata: document.getElementById('evento-durata').value,
     luogo: document.getElementById('evento-luogo').value, 
     note: document.getElementById('evento-note').value, 
