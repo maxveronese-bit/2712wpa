@@ -330,14 +330,13 @@ function renderDiarioDayView(dateStr) {
   let html = `<h3>${dayName}</h3>`;
   html += '<div class="day-view">';
   
-  // Griglia oraria base
+  // Griglia oraria con voci diario sovrapposte
   html += '<div class="time-grid">';
   for (let h = 7; h <= 21; h++) {
     html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
   }
-  html += '</div>';
   
-  // Voci diario posizionate sopra la griglia
+  // Voci diario posizionate sopra la griglia (dentro time-grid)
   html += '<div class="events-layer">';
   items.forEach(d => {
     const startHour = d.ora ? parseInt(d.ora.split(':')[0]) : 7;
@@ -356,7 +355,7 @@ function renderDiarioDayView(dateStr) {
     html += `<span class="item-meta">${timeRange}</span>`;
     html += `</div>`;
   });
-  html += '</div>';
+  html += '</div></div>';
   
   html += '</div>';
   document.getElementById('diario-view-content').innerHTML = html;
@@ -798,14 +797,12 @@ function renderAgendaDayView(dateStr, tipo) {
   const endMinute = 21 * 60; // 21:00
   
   if (tipo === 'eventi') {
-    // Griglia oraria base
+    // Griglia oraria con eventi sovrapposti
     html += '<div class="time-grid">';
     for (let h = 7; h <= 21; h++) {
       html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
     }
-    html += '</div>';
-    
-    // Eventi posizionati sopra la griglia
+    // Eventi posizionati sopra la griglia (dentro time-grid)
     html += '<div class="events-layer">';
     items.forEach(e => {
       const startHour = e.ora ? parseInt(e.ora.split(':')[0]) : 7;
@@ -822,16 +819,15 @@ function renderAgendaDayView(dateStr, tipo) {
       html += `<span class="item-meta">${timeRange}</span>`;
       html += `</div>`;
     });
-    html += '</div>';
+    html += '</div></div>';
   } else {
     // Task/Memo: griglia oraria con posizionamento
     html += '<div class="time-grid">';
     for (let h = 7; h <= 21; h++) {
       html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
     }
-    html += '</div>';
     
-    // Impegni posizionati sopra la griglia
+    // Impegni posizionati sopra la griglia (dentro time-grid)
     html += '<div class="events-layer">';
     let accMins = 7 * 60; // Inizia dalle 7:00
     items.forEach(item => {
@@ -852,7 +848,7 @@ function renderAgendaDayView(dateStr, tipo) {
       }
       accMins += dur;
     });
-    html += '</div>';
+    html += '</div></div>';
     
     // Sommario totale
     const totalMins = items.reduce((s, i) => s + (parseInt(i.durata) || 30), 0);
