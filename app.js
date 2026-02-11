@@ -330,22 +330,34 @@ function renderDiarioDayView(dateStr) {
   let html = `<h3>${dayName}</h3>`;
   html += '<div class="day-view">';
   
-  // Griglia oraria 07:00 - 21:00
+  // Griglia oraria base
+  html += '<div class="time-grid">';
   for (let h = 7; h <= 21; h++) {
-    const hourItems = items.filter(d => {
-      if (!d.ora) return h === 7; // Senza ora, metti alle 7
-      const [hh] = d.ora.split(':').map(Number);
-      return hh === h;
-    });
-    html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content">`;
-    hourItems.forEach(d => {
-      const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
-      const dur = parseInt(d.durata) || 30;
-      const timeRange = formatTimeRange(d.ora, dur);
-      html += `<div class="agenda-item diario" style="height:${Math.max(24, dur/2)}px" onclick="openDiario('${d.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(d.titolo)}</span><span class="item-meta">${timeRange} ${d.durata ? '('+d.durata+'min)' : ''}</span></div>`;
-    });
-    html += '</div></div>';
+    html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
   }
+  html += '</div>';
+  
+  // Voci diario posizionate sopra la griglia
+  html += '<div class="events-layer">';
+  items.forEach(d => {
+    const startHour = d.ora ? parseInt(d.ora.split(':')[0]) : 7;
+    const startMin = d.ora ? parseInt(d.ora.split(':')[1]) : 0;
+    const dur = parseInt(d.durata) || 30;
+    const icon = d.tipo === 'task' ? '✅' : d.tipo === 'tempo' ? '⏱️' : d.tipo === 'nota' ? '📝' : '📔';
+    const timeRange = formatTimeRange(d.ora, dur);
+    
+    // Calcola posizione (ogni ora = 50px)
+    const topOffset = (startHour - 7) * 50 + (startMin / 60) * 50;
+    const height = Math.max(24, (dur / 60) * 50);
+    
+    html += `<div class="agenda-item diario" style="top:${topOffset}px;height:${height}px" onclick="openDiario('${d.id}')">`;
+    html += `<span class="item-icon">${icon}</span>`;
+    html += `<span class="item-title">${esc(d.titolo)}</span>`;
+    html += `<span class="item-meta">${timeRange}</span>`;
+    html += `</div>`;
+  });
+  html += '</div>';
+  
   html += '</div>';
   document.getElementById('diario-view-content').innerHTML = html;
 }
@@ -786,47 +798,65 @@ function renderAgendaDayView(dateStr, tipo) {
   const endMinute = 21 * 60; // 21:00
   
   if (tipo === 'eventi') {
-    // Eventi hanno orario specifico
+    // Griglia oraria base
+    html += '<div class="time-grid">';
     for (let h = 7; h <= 21; h++) {
-      const hourItems = items.filter(e => {
-        if (!e.ora) return h === 7; // Senza ora, metti alle 7
-        const [hh] = e.ora.split(':').map(Number);
-        return hh === h;
-      });
-      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content">`;
-      hourItems.forEach(e => {
-        const dur = parseInt(e.durata) || 60;
-        const timeRange = formatTimeRange(e.ora, dur);
-        html += `<div class="agenda-item evento" style="height:${Math.max(24, dur/2)}px" onclick="openEvento('${e.id}')"><span class="item-title">${esc(e.titolo)}</span><span class="item-meta">${timeRange} (${dur}min)</span></div>`;
-      });
-      html += '</div></div>';
-    }
-  } else {
-    // Task/Memo: impilati in sequenza dalle 07:00
-    for (let h = 7; h <= 21; h++) {
-      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content" id="hour-${h}"></div></div>`;
+      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
     }
     html += '</div>';
     
-    // Calcola posizionamento
-    let posHtml = '<div class="stacked-items">';
-    let accMins = 7 * 60;
+    // Eventi posizionati sopra la griglia
+    html += '<div class="events-layer">';
+    items.forEach(e => {
+      const startHour = e.ora ? parseInt(e.ora.split(':')[0]) : 7;
+      const startMin = e.ora ? parseInt(e.ora.split(':')[1]) : 0;
+      const dur = parseInt(e.durata) || 60;
+      const timeRange = formatTimeRange(e.ora, dur);
+      
+      // Calcola posizione (ogni ora = 50px)
+      const topOffset = (startHour - 7) * 50 + (startMin / 60) * 50;
+      const height = Math.max(24, (dur / 60) * 50);
+      
+      html += `<div class="agenda-item evento" style="top:${topOffset}px;height:${height}px" onclick="openEvento('${e.id}')">`;
+      html += `<span class="item-title">${esc(e.titolo)}</span>`;
+      html += `<span class="item-meta">${timeRange}</span>`;
+      html += `</div>`;
+    });
+    html += '</div>';
+  } else {
+    // Task/Memo: griglia oraria con posizionamento
+    html += '<div class="time-grid">';
+    for (let h = 7; h <= 21; h++) {
+      html += `<div class="hour-row"><div class="hour-label">${h.toString().padStart(2,'0')}:00</div><div class="hour-content"></div></div>`;
+    }
+    html += '</div>';
+    
+    // Impegni posizionati sopra la griglia
+    html += '<div class="events-layer">';
+    let accMins = 7 * 60; // Inizia dalle 7:00
     items.forEach(item => {
       const dur = parseInt(item.durata) || 30;
-      const startHour = Math.floor(accMins / 60);
       const icon = item._tipo === 'task' ? '✅' : '📝';
+      const timeRange = formatTimeRange(`${Math.floor(accMins/60).toString().padStart(2,'0')}:${(accMins%60).toString().padStart(2,'0')}`, dur);
+      
+      // Calcola posizione (ogni ora = 50px)
+      const topOffset = (accMins - 7 * 60) / 60 * 50;
+      const height = Math.max(24, (dur / 60) * 50);
+      
       if (accMins < endMinute) {
-        posHtml += `<div class="agenda-item ${item._tipo}" onclick="open${item._tipo==='task'?'Task':'Memo'}('${item.id}')"><span class="item-icon">${icon}</span><span class="item-title">${esc(item.titolo)}</span><span class="item-meta">${dur}min</span></div>`;
+        html += `<div class="agenda-item ${item._tipo}" style="top:${topOffset}px;height:${height}px" onclick="open${item._tipo==='task'?'Task':'Memo'}('${item.id}')">`;
+        html += `<span class="item-icon">${icon}</span>`;
+        html += `<span class="item-title">${esc(item.titolo)}</span>`;
+        html += `<span class="item-meta">${timeRange}</span>`;
+        html += `</div>`;
       }
       accMins += dur;
     });
-    posHtml += '</div>';
+    html += '</div>';
     
     // Sommario totale
     const totalMins = items.reduce((s, i) => s + (parseInt(i.durata) || 30), 0);
     html += `<div class="day-summary"><strong>Totale impegni: ${Math.floor(totalMins/60)}h ${totalMins%60}m</strong> (${items.length} elementi)</div>`;
-    html += posHtml;
-    return html;
   }
   
   html += '</div>';
@@ -959,6 +989,8 @@ function openNewMemo() {
   document.getElementById('memo-scadenza').value = '';
   document.getElementById('memo-durata').value = '';
   document.getElementById('memo-urgente').checked = false;
+  document.getElementById('memo-link1').value = '';
+  document.getElementById('memo-link2').value = '';
   document.getElementById('btn-del-memo').style.display = 'none';
   openModal('modal-memo');
 }
@@ -972,6 +1004,8 @@ function openMemo(id) {
   document.getElementById('memo-scadenza').value = m.scadenza ? formatDateISO(parseDate(m.scadenza)) : '';
   document.getElementById('memo-durata').value = m.durata || '';
   document.getElementById('memo-urgente').checked = m.urgente || false;
+  document.getElementById('memo-link1').value = m.link1 || '';
+  document.getElementById('memo-link2').value = m.link2 || '';
   document.getElementById('btn-del-memo').style.display = 'inline-block';
   openModal('modal-memo');
 }
@@ -986,6 +1020,8 @@ function saveMemo() {
     scadenza: document.getElementById('memo-scadenza').value,
     durata: document.getElementById('memo-durata').value,
     urgente: document.getElementById('memo-urgente').checked,
+    link1: document.getElementById('memo-link1').value,
+    link2: document.getElementById('memo-link2').value,
     processato: false,
     timestamp: new Date().toISOString() 
   };
@@ -1011,6 +1047,8 @@ function openNewTask() {
   document.getElementById('task-priorita').value = 'media';
   document.getElementById('task-stato').value = 'da_fare';
   document.getElementById('task-codice').value = '';
+  document.getElementById('task-link1').value = '';
+  document.getElementById('task-link2').value = '';
   document.getElementById('btn-del-task').style.display = 'none';
   openModal('modal-task');
 }
@@ -1026,6 +1064,8 @@ function openTask(id) {
   document.getElementById('task-priorita').value = t.priorita || 'media';
   document.getElementById('task-stato').value = t.stato || 'da_fare';
   document.getElementById('task-codice').value = t.codice || '';
+  document.getElementById('task-link1').value = t.link1 || '';
+  document.getElementById('task-link2').value = t.link2 || '';
   document.getElementById('btn-del-task').style.display = 'inline-block';
   openModal('modal-task');
 }
@@ -1043,7 +1083,9 @@ function saveTask() {
     durata: document.getElementById('task-durata').value,
     priorita: document.getElementById('task-priorita').value, 
     stato: document.getElementById('task-stato').value, 
-    codice: document.getElementById('task-codice').value, 
+    codice: document.getElementById('task-codice').value,
+    link1: document.getElementById('task-link1').value,
+    link2: document.getElementById('task-link2').value,
     creato: new Date().toISOString() 
   };
   // Registra nel diario se appena completato
@@ -1122,6 +1164,8 @@ function openNewPratica() {
   document.getElementById('pratica-cliente').value = '';
   document.getElementById('pratica-tipo').value = '';
   document.getElementById('pratica-stato').value = 'aperta';
+  document.getElementById('pratica-link1').value = '';
+  document.getElementById('pratica-link2').value = '';
   document.getElementById('btn-del-pratica').style.display = 'none';
   openModal('modal-pratica');
 }
@@ -1134,6 +1178,8 @@ function openPratica(id) {
   document.getElementById('pratica-cliente').value = p.cliente || '';
   document.getElementById('pratica-tipo').value = p.tipo || '';
   document.getElementById('pratica-stato').value = p.stato || 'aperta';
+  document.getElementById('pratica-link1').value = p.link1 || '';
+  document.getElementById('pratica-link2').value = p.link2 || '';
   document.getElementById('btn-del-pratica').style.display = 'inline-block';
   openModal('modal-pratica');
 }
@@ -1142,7 +1188,7 @@ function savePratica() {
   const codice = document.getElementById('pratica-codice').value.trim();
   const cliente = document.getElementById('pratica-cliente').value.trim();
   if (!codice || !cliente) { toast('Inserisci codice e cliente'); return; }
-  const item = { id: state.editingId || genId(), codice, cliente, tipo: document.getElementById('pratica-tipo').value, stato: document.getElementById('pratica-stato').value, timestamp: new Date().toISOString() };
+  const item = { id: state.editingId || genId(), codice, cliente, tipo: document.getElementById('pratica-tipo').value, stato: document.getElementById('pratica-stato').value, link1: document.getElementById('pratica-link1').value, link2: document.getElementById('pratica-link2').value, timestamp: new Date().toISOString() };
   if (state.editingId) { const i = state.pratiche.findIndex(x => x.id === state.editingId); if (i >= 0) state.pratiche[i] = item; }
   else state.pratiche.push(item);
   closeModal('modal-pratica'); saveData(); syncItem('pratiche', item); render(); toast('Salvato!');
@@ -1161,6 +1207,8 @@ function openNewProgetto() {
   document.getElementById('progetto-codice').value = '';
   document.getElementById('progetto-nome').value = '';
   document.getElementById('progetto-stato').value = 'pianificato';
+  document.getElementById('progetto-link1').value = '';
+  document.getElementById('progetto-link2').value = '';
   document.getElementById('btn-del-progetto').style.display = 'none';
   openModal('modal-progetto');
 }
@@ -1172,6 +1220,8 @@ function openProgetto(id) {
   document.getElementById('progetto-codice').value = p.codice || '';
   document.getElementById('progetto-nome').value = p.nome || '';
   document.getElementById('progetto-stato').value = p.stato || 'pianificato';
+  document.getElementById('progetto-link1').value = p.link1 || '';
+  document.getElementById('progetto-link2').value = p.link2 || '';
   document.getElementById('btn-del-progetto').style.display = 'inline-block';
   openModal('modal-progetto');
 }
@@ -1180,7 +1230,7 @@ function saveProgetto() {
   const codice = document.getElementById('progetto-codice').value.trim();
   const nome = document.getElementById('progetto-nome').value.trim();
   if (!codice || !nome) { toast('Inserisci codice e nome'); return; }
-  const item = { id: state.editingId || genId(), codice, nome, stato: document.getElementById('progetto-stato').value, timestamp: new Date().toISOString() };
+  const item = { id: state.editingId || genId(), codice, nome, stato: document.getElementById('progetto-stato').value, link1: document.getElementById('progetto-link1').value, link2: document.getElementById('progetto-link2').value, timestamp: new Date().toISOString() };
   if (state.editingId) { const i = state.progetti.findIndex(x => x.id === state.editingId); if (i >= 0) state.progetti[i] = item; }
   else state.progetti.push(item);
   closeModal('modal-progetto'); saveData(); syncItem('progetti', item); render(); toast('Salvato!');
