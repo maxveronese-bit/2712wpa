@@ -648,7 +648,7 @@ function renderRoutine() {
   if (items.length === 0) html = '<p class="empty">Nessuna routine attiva</p>';
   else items.forEach(r => {
     const done = state.routine_log.some(l => l.routineId === r.id && formatDateISO(parseDate(l.data)) === today);
-    html += `<div class="list-item ${done?'completed':''}" onclick="toggleRoutineLog('${r.id}')"><span class="list-item-icon">${r.icona || '🔄'}</span><div class="list-item-content"><div class="list-item-title">${esc(r.nome)}</div><div class="list-item-meta">${r.frequenza}</div></div><span class="list-item-check">${done ? '✅' : '⬜'}</span></div>`;
+    html += `<div class="list-item ${done?'completed':''}"><span class="list-item-icon">${r.icona || '🔄'}</span><div class="list-item-content" onclick="toggleRoutineLog('${r.id}')"><div class="list-item-title">${esc(r.nome)}</div><div class="list-item-meta">${r.frequenza}</div></div><span class="list-item-check" onclick="toggleRoutineLog('${r.id}')">${done ? '✅' : '⬜'}</span><span class="list-item-edit" onclick="openRoutine('${r.id}')">✏️</span></div>`;
   });
   document.getElementById('routine-list').innerHTML = html;
 }
